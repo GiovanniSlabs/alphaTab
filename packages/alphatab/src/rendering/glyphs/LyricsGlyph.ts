@@ -6,6 +6,12 @@ import { EffectGlyph } from '@coderline/alphatab/rendering/glyphs/EffectGlyph';
  * @internal
  */
 export class LyricsGlyph extends EffectGlyph {
+    /**
+     * Reference text used to derive a string-independent line height:
+     * it covers both the ascender and the descender range of the font.
+     */
+    private static readonly lineHeightReference: string = 'Mg';
+
     private _lines: string[];
     private _linePositions: number[] = [];
     private _maxLineWidth: number = 0;
@@ -27,12 +33,21 @@ export class LyricsGlyph extends EffectGlyph {
 
         const canvas = this.renderer.scoreRenderer.canvas!;
         canvas.font = this.font;
+
+        // The vertical advance of a lyric line must not depend on which glyphs the
+        // line happens to contain: measureText reports the ink box of the string,
+        // so a line with descenders or accents ("lei,", "fai?") would push the
+        // following line further down than a line without them ("do-"), and the
+        // lyric rows would no longer line up across beats. Measure a fixed
+        // reference instead, so the spacing only depends on the font.
+        const lineHeight = canvas.measureText(LyricsGlyph.lineHeightReference).height;
+
         let y = 0;
         let maxWidth = 0;
         for (const line of this._lines) {
             this._linePositions.push(y);
             const size = canvas.measureText(line.length > 0 ? line : ' ');
-            y += size.height + lineSpacing;
+            y += lineHeight + lineSpacing;
             if (size.width > maxWidth) {
                 maxWidth = size.width;
             }

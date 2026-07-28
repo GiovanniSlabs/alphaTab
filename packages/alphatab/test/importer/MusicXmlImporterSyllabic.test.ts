@@ -29,14 +29,14 @@ function note(step: string, lyric: string): string {
 
 describe('MusicXmlImporter - syllabic', () => {
     it('marks continued syllables with a trailing dash', () => {
-        // "O-gni not-te": begin/middle continue the word, end/single terminate it.
+        // "O-gni not-te" (il trattino è staccato da uno spazio sottile): begin/middle continue the word, end/single terminate it.
         const lyrics = loadLyrics(
             note('C', '<lyric number="1"><syllabic>begin</syllabic><text>O</text></lyric>') +
                 note('D', '<lyric number="1"><syllabic>end</syllabic><text>gni</text></lyric>') +
                 note('E', '<lyric number="1"><syllabic>begin</syllabic><text>not</text></lyric>') +
                 note('F', '<lyric number="1"><syllabic>end</syllabic><text>te</text></lyric>')
         );
-        expect(lyrics.slice(0, 4)).toEqual(['O-', 'gni', 'not-', 'te']);
+        expect(lyrics.slice(0, 4)).toEqual(['O -', 'gni', 'not -', 'te']);
     });
 
     it('keeps single syllables and middle syllables apart', () => {
@@ -44,7 +44,7 @@ describe('MusicXmlImporter - syllabic', () => {
             note('C', '<lyric number="1"><syllabic>single</syllabic><text>sei</text></lyric>') +
                 note('D', '<lyric number="1"><syllabic>middle</syllabic><text>ri</text></lyric>')
         );
-        expect(lyrics.slice(0, 2)).toEqual(['sei', 'ri-']);
+        expect(lyrics.slice(0, 2)).toEqual(['sei', 'ri -']);
     });
 
     it('applies the syllabic only to the text right after it (elisions)', () => {

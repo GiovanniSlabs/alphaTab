@@ -3321,9 +3321,13 @@ export class MusicXmlImporter extends ScoreImporter {
                     break;
                 case 'text': {
                     // 'begin' and 'middle' are followed by further syllables of the
-                    // same word, 'end' and 'single' terminate it.
+                    // same word, 'end' and 'single' terminate it. The dash is offset
+                    // from the syllable by a thin space so it reads as a separator
+                    // rather than as part of the word.
                     const text: string =
-                        syllabic === 'begin' || syllabic === 'middle' ? `${c.innerText}-` : c.innerText;
+                        syllabic === 'begin' || syllabic === 'middle'
+                            ? `${c.innerText} -`
+                            : c.innerText;
                     // a <syllabic> applies only to the <text> right after it
                     // (on elisions multiple syllabic/text pairs share one <lyric>).
                     syllabic = '';
