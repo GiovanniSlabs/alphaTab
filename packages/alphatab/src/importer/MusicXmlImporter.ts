@@ -3304,18 +3304,42 @@ export class MusicXmlImporter extends ScoreImporter {
             beat.lyrics.push('');
         }
 
+        // MusicXML marks the position of a syllable within a word via <syllabic>.
+        // alphaTab has no dedicated model for it, but its Guitar Pro lyrics already
+        // use a trailing dash to mark a syllable which continues into the next beat
+        // (see Lyrics.ts, LyricsState.Dash). We follow the same convention so that
+        // MusicXML and Guitar Pro files render consistently.
+        let syllabic: string = '';
+        // an <elision> joins two words sung on the same note: the text following it
+        // must not be separated by a space (e.g. "la‿in", not "la‿ in").
+        let afterElision: boolean = false;
+
         for (const c of element.childElements()) {
             switch (c.localName) {
-                // case 'syllabic' not supported
-                case 'text':
-                    if (beat.lyrics[index]) {
-                        beat.lyrics[index] += ` ${c.innerText}`;
-                    } else {
-                        beat.lyrics[index] = c.innerText;
-                    }
+                case 'syllabic':
+                    syllabic = c.innerText;
                     break;
+                case 'text': {
+                    // 'begin' and 'middle' are followed by further syllables of the
+                    // same word, 'end' and 'single' terminate it.
+                    const text: string =
+                        syllabic === 'begin' || syllabic === 'middle' ? `${c.innerText}-` : c.innerText;
+                    // a <syllabic> applies only to the <text> right after it
+                    // (on elisions multiple syllabic/text pairs share one <lyric>).
+                    syllabic = '';
+                    if (!beat.lyrics[index]) {
+                        beat.lyrics[index] = text;
+                    } else if (afterElision) {
+                        beat.lyrics[index] += text;
+                    } else {
+                        beat.lyrics[index] += ` ${text}`;
+                    }
+                    afterElision = false;
+                    break;
+                }
                 case 'elision':
                     beat.lyrics[index] += c.innerText;
+                    afterElision = true;
                     break;
             }
         }
