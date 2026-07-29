@@ -2042,8 +2042,11 @@ export class MusicXmlImporter extends ScoreImporter {
             switch (c.localName) {
                 case 'direction-type':
                     // See https://github.com/CoderLine/alphaTab/issues/2102
-                    const type = c.firstElement;
-                    if (type) {
+                    // A direction-type can hold more than one child: exporters split
+                    // a chord symbol like "Si♭" into the text plus a separate music
+                    // glyph for the accidental. Collect them all, otherwise only one
+                    // part of the annotation survives.
+                    for (const type of c.childElements()) {
                         directionTypes.push(type);
                     }
                     break;
@@ -2114,7 +2117,11 @@ export class MusicXmlImporter extends ScoreImporter {
                     masterBar.addDirection(Direction.TargetCoda);
                     break;
                 case 'words':
-                    previousWords = direction.innerText;
+                    // A direction-type can hold several <words> which together form
+                    // one annotation: exporters split a chord symbol like "Si♭" into
+                    // the text and a separate music glyph for the accidental.
+                    // Overwriting would keep only the last part.
+                    previousWords += direction.innerText;
                     break;
                 // case 'symbol': Not supported
                 case 'wedge':
