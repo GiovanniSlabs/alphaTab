@@ -28,10 +28,17 @@ describe('MusicXmlImporter - directions', () => {
     it('joins multiple <words> of the same direction', () => {
         // Exporters split a chord symbol into the text plus a music glyph for the
         // accidental: keeping only the last part would lose the chord name.
-        expect(firstBeatText('<words>Si</words><words></words>')).toBe('Si');
+        expect(firstBeatText('<words>Si</words><words></words>')).toBe('Si♭');
     });
 
     it('keeps a single <words> unchanged', () => {
         expect(firstBeatText('<words>Do</words>')).toBe('Do');
+    });
+
+    it('maps music-font accidentals in text to standard unicode', () => {
+        // The accidental of a chord symbol arrives as a SMuFL code point from a
+        // music font: kept as-is it would only render with that same font.
+        expect(firstBeatText('<words>Si</words><words>\ue260</words>')).toBe('Si\u266d');
+        expect(firstBeatText('<words>Fa\ue262</words>')).toBe('Fa\u266f');
     });
 });

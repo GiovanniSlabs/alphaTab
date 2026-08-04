@@ -2031,6 +2031,31 @@ export class MusicXmlImporter extends ScoreImporter {
         }
     }
 
+    /**
+     * Accidentals written into free text as SMuFL code points, mapped to their
+     * standard Unicode equivalent. Exporters split a chord symbol like "Si♭" into
+     * the text plus a glyph from a music font: kept as-is that code point lands in
+     * the Private Use Area, so it only shows up if the very same music font is used
+     * for the text — otherwise the reader sees an empty box.
+     */
+    private static readonly _textSymbols: Map<string, string> = new Map<string, string>([
+        ['', '♭'], // flat
+        ['', '♮'], // natural
+        ['', '♯'], // sharp
+        ['', '\u{1D12A}'], // double sharp
+        ['', '\u{1D12B}'] // double flat
+    ]);
+
+    private static _toUnicodeSymbols(text: string): string {
+        let result = text;
+        for (const [smufl, unicode] of MusicXmlImporter._textSymbols) {
+            if (result.includes(smufl)) {
+                result = result.split(smufl).join(unicode);
+            }
+        }
+        return result;
+    }
+
     private _parseDirection(element: XmlNode, masterBar: MasterBar, track: Track) {
         const directionTypes: XmlNode[] = [];
         let offset: number | null = null;
@@ -2121,7 +2146,7 @@ export class MusicXmlImporter extends ScoreImporter {
                     // one annotation: exporters split a chord symbol like "Si♭" into
                     // the text and a separate music glyph for the accidental.
                     // Overwriting would keep only the last part.
-                    previousWords += direction.innerText;
+                    previousWords += MusicXmlImporter._toUnicodeSymbols(direction.innerText);
                     break;
                 // case 'symbol': Not supported
                 case 'wedge':
