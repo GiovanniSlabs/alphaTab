@@ -443,21 +443,25 @@ export class Bar {
 
     /**
      * Per-bar override for the standard-notation staff's display.
+     * @since 1.9.0
      */
     public scoreDisplay?: ScoreBarOverride;
 
     /**
      * Per-bar override for the tablature staff's display.
+     * @since 1.9.0
      */
     public tabDisplay?: TabBarOverride;
 
     /**
      * Per-bar override for the slash staff's display.
+     * @since 1.9.0
      */
     public slashDisplay?: SlashBarOverride;
 
     /**
      * Per-bar override for the numbered (jianpu) staff's display.
+     * @since 1.9.0
      */
     public numberedDisplay?: NumberedBarOverride;
 
@@ -571,9 +575,10 @@ export class Bar {
                 }
             }
 
-            const isDown = previousMarker !== null && previousMarker.pedalType !== SustainPedalMarkerType.Up;
-
             for (const marker of sustainPedals) {
+                // a press while the pedal is already down continues the pedal
+                const isDown = previousMarker !== null && previousMarker.pedalType !== SustainPedalMarkerType.Up;
+
                 if (previousMarker && previousMarker.pedalType !== SustainPedalMarkerType.Up) {
                     //duplicate or out-of-order markers
                     if (previousMarker.bar === this && marker.ratioPosition <= previousMarker.ratioPosition) {

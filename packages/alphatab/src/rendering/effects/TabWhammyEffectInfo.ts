@@ -3,82 +3,59 @@ import { NotationElement } from '@coderline/alphatab/NotationSettings';
 import type { BarRendererBase } from '@coderline/alphatab/rendering/BarRendererBase';
 import type { EffectBand } from '@coderline/alphatab/rendering/EffectBand';
 import { EffectBarGlyphSizing } from '@coderline/alphatab/rendering/EffectBarGlyphSizing';
-import { EffectBandPlacementCategory, EffectInfo } from '@coderline/alphatab/rendering/EffectInfo';
+import { EffectBandPlacementCategory, type EffectInfo } from '@coderline/alphatab/rendering/EffectInfo';
 import type { EffectGlyph } from '@coderline/alphatab/rendering/glyphs/EffectGlyph';
 import { TabWhammyBarGlyph } from '@coderline/alphatab/rendering/glyphs/TabWhammyBarGlyph';
-import type { Settings } from '@coderline/alphatab/Settings';
+
+// this logic below handles the vertical alignment of whammys so that the "0" value is center aligned
+// within the staff
+// the solution is still a bit hacky though.
+const offsetSharedDataKey: string = 'tab.whammy.offset';
 
 /**
  * @internal
  */
-export class TabWhammyEffectInfo extends EffectInfo {
-    public get notationElement(): NotationElement {
-        return NotationElement.EffectWhammyBarLine;
-    }
-
-    public get hideOnMultiTrack(): boolean {
-        return false;
-    }
-
-    public get sizingMode(): EffectBarGlyphSizing {
-        return EffectBarGlyphSizing.GroupedOnBeatToEnd;
-    }
-
-    public shouldCreateGlyph(_settings: Settings, beat: Beat): boolean {
+export const tabWhammyEffectInfo: EffectInfo = {
+    effectId: 'EffectWhammyBarLine',
+    notationElement: NotationElement.EffectWhammyBarLine,
+    hideOnMultiTrack: false,
+    sizingMode: EffectBarGlyphSizing.GroupedOnBeatToEnd,
+    shouldCreateGlyph: (_renderer: BarRendererBase, beat: Beat): boolean => {
         return beat.hasWhammyBar;
-    }
-
-    public createNewGlyph(_renderer: BarRendererBase, beat: Beat): EffectGlyph {
+    },
+    createNewGlyph: (_renderer: BarRendererBase, beat: Beat): EffectGlyph => {
         return new TabWhammyBarGlyph(beat);
-    }
-
-    public canExpand(_from: Beat, to: Beat): boolean {
+    },
+    canExpand: (_from: Beat, to: Beat): boolean => {
         return to.hasWhammyBar;
-    }
-
-    // this logic below handles the vertical alignment of whammys so that the "0" value is center aligned
-    // within the staff
-    // the solution is still a bit hacky though.
-    public static readonly offsetSharedDataKey: string = 'tab.whammy.offset';
-
-    public override onAlignGlyphs(band: EffectBand): void {
+    },
+    onAlignGlyphs: (band: EffectBand): void => {
         // re-register the sizes so they are available during finalization later
-        const info = band.renderer.staff!.getSharedLayoutData<[number, number]>(
-            TabWhammyEffectInfo.offsetSharedDataKey,
-            [0, 0]
-        );
-        band.renderer.staff!.setSharedLayoutData(TabWhammyEffectInfo.offsetSharedDataKey, info);
-        for (const voiceGlyphs of band.glyphsByVoice) {
-            for (let i = 0, n = voiceGlyphs.length; i < n; i++) {
-                const tb = voiceGlyphs[i] as TabWhammyBarGlyph;
-                if (tb.originalTopOffset > info[0]) {
-                    info[0] = tb.originalTopOffset;
-                }
-                if (tb.originalBottomOffset > info[1]) {
-                    info[1] = tb.originalBottomOffset;
-                }
+        const info = band.renderer.staff!.getSharedLayoutData<[number, number]>(offsetSharedDataKey, [0, 0]);
+        band.renderer.staff!.setSharedLayoutData(offsetSharedDataKey, info);
+        const glyphs = band.glyphs;
+        for (let i = 0, n = glyphs.length; i < n; i++) {
+            const tb = glyphs[i] as TabWhammyBarGlyph;
+            if (tb.originalTopOffset > info[0]) {
+                info[0] = tb.originalTopOffset;
+            }
+            if (tb.originalBottomOffset > info[1]) {
+                info[1] = tb.originalBottomOffset;
             }
         }
-    }
-
-    public override finalizeBand(band: EffectBand): void {
-        const info = band.renderer.staff!.getSharedLayoutData<[number, number]>(
-            TabWhammyEffectInfo.offsetSharedDataKey,
-            [0, 0]
-        );
+    },
+    finalizeBand: (band: EffectBand): void => {
+        const info = band.renderer.staff!.getSharedLayoutData<[number, number]>(offsetSharedDataKey, [0, 0]);
         const top = info[0];
         const bottom = info[1];
-        for (const voiceGlyphs of band.glyphsByVoice) {
-            for (let i = 0, n = voiceGlyphs.length; i < n; i++) {
-                const tb = voiceGlyphs[i] as TabWhammyBarGlyph;
-                tb.topOffset = top;
-                tb.bottomOffset = bottom;
-                tb.height = top + bottom;
-            }
+        const glyphs = band.glyphs;
+        for (let i = 0, n = glyphs.length; i < n; i++) {
+            const tb = glyphs[i] as TabWhammyBarGlyph;
+            tb.topOffset = top;
+            tb.bottomOffset = bottom;
+            tb.height = top + bottom;
         }
         band.height = top + bottom;
-    }
-    public override get placementCategory(): EffectBandPlacementCategory {
-        return EffectBandPlacementCategory.Span;
-    }
-}
+    },
+    placementCategory: EffectBandPlacementCategory.Span
+};

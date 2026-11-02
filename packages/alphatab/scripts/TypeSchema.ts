@@ -35,7 +35,9 @@ export function buildTypeSchema(program: ts.Program, input: ts.ClassDeclaration 
         isStrict: !!ts.getJSDocTags(input).find(t => t.tagName.text === 'json_strict'),
         hasToJsonExtension: false,
         hasSetPropertyExtension: false,
-        isRecord: !!ts.getJSDocTags(input).find(t => t.tagName.text === 'record')
+        hasAfterFromJsonExtension: false,
+        isRecord: !!ts.getJSDocTags(input).find(t => t.tagName.text === 'record'),
+        isJsonRoot: !!ts.getJSDocTags(input).find(t => t.tagName.text === 'json_root')
     };
 
     const accessorHasSetter = (cls: ts.ClassDeclaration | ts.InterfaceDeclaration, name: string): boolean =>
@@ -95,9 +97,18 @@ export function buildTypeSchema(program: ts.Program, input: ts.ClassDeclaration 
                             `[serializer] ${sourceFile.fileName}:${line + 1} - deprecated accessor ${(member.name as ts.Identifier).text}: consider @json_read_only (input-only legacy alias) or @json_ignore (drop from JSON entirely).`
                         );
                     }
+                    const initializer = ts.isPropertyDeclaration(member) ? member.initializer : undefined;
+                    const isUnsetAsNaN =
+                        !!initializer &&
+                        ts.isPropertyAccessExpression(initializer) &&
+                        ts.isIdentifier(initializer.expression) &&
+                        initializer.expression.text === 'Number' &&
+                        initializer.name.text === 'NaN';
+
                     schema.properties.push({
                         jsonNames: jsonNames,
                         asRaw,
+                        isUnsetAsNaN,
                         partialNames: !!jsDoc.find(t => t.tagName.text === 'json_partial_names'),
                         target: jsDoc.find(t => t.tagName.text === 'target')?.comment as string,
                         isJsonReadOnly: isReadonly,
@@ -123,6 +134,9 @@ export function buildTypeSchema(program: ts.Program, input: ts.ClassDeclaration 
                     break;
                 case 'setProperty':
                     schema.hasSetPropertyExtension = true;
+                    break;
+                case 'afterFromJson':
+                    schema.hasAfterFromJsonExtension = true;
                     break;
             }
         }
@@ -427,6 +441,11 @@ export function getTypeWithNullableInfo(
 
 export interface TypeProperty {
     partialNames: boolean;
+    /**
+     * The property defaults to `Number.NaN`, which marks it as unset. Unset values are not written,
+     * and `null`/`undefined` (what JSON makes of NaN) are read as unset.
+     */
+    isUnsetAsNaN: boolean;
     name: string;
     jsDocTags: readonly ts.JSDocTag[];
     type: TypeWithNullableInfo;
@@ -441,7 +460,12 @@ export interface TypeSchema {
     isStrict: boolean;
     hasToJsonExtension: boolean;
     hasSetPropertyExtension: boolean;
+    hasAfterFromJsonExtension: boolean;
     isRecord: boolean;
+    /**
+     * Whether the class gets `toJson`/`fromJson` (`@json_root`): the classes the hand-written code converts on their own.
+     */
+    isJsonRoot: boolean;
     properties: TypeProperty[];
 }
 

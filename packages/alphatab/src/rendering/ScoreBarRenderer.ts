@@ -2,10 +2,12 @@ import { AccidentalType } from '@coderline/alphatab/model/AccidentalType';
 import { type Bar, BarSubElement } from '@coderline/alphatab/model/Bar';
 import { type Beat, BeatSubElement } from '@coderline/alphatab/model/Beat';
 import { Clef } from '@coderline/alphatab/model/Clef';
+import type { ElementDisplay } from '@coderline/alphatab/model/ElementDisplay';
 import { GraceType } from '@coderline/alphatab/model/GraceType';
 import { KeySignature } from '@coderline/alphatab/model/KeySignature';
 import { ModelUtils } from '@coderline/alphatab/model/ModelUtils';
 import type { Note } from '@coderline/alphatab/model/Note';
+import type { BarNumberDisplay } from '@coderline/alphatab/model/RenderStylesheet';
 import { Staff } from '@coderline/alphatab/model/Staff';
 import type { Voice } from '@coderline/alphatab/model/Voice';
 import type { ICanvas } from '@coderline/alphatab/platform/ICanvas';
@@ -14,13 +16,12 @@ import { AccidentalGlyph } from '@coderline/alphatab/rendering/glyphs/Accidental
 import { ClefGlyph } from '@coderline/alphatab/rendering/glyphs/ClefGlyph';
 import type { Glyph } from '@coderline/alphatab/rendering/glyphs/Glyph';
 import { KeySignatureGlyph } from '@coderline/alphatab/rendering/glyphs/KeySignatureGlyph';
+import { ScoreChordNoteHeadInfo } from '@coderline/alphatab/rendering/glyphs/ScoreNoteChordGlyphBase';
 import { ScoreTimeSignatureGlyph } from '@coderline/alphatab/rendering/glyphs/ScoreTimeSignatureGlyph';
-import { SpacingGlyph } from '@coderline/alphatab/rendering/glyphs/SpacingGlyph';
-import type { ElementDisplay } from '@coderline/alphatab/model/ElementDisplay';
-import { BarNumberDisplay } from '@coderline/alphatab/model/RenderStylesheet';
 import { LineBarRenderer } from '@coderline/alphatab/rendering/LineBarRenderer';
 import { ScoreBeatContainerGlyph } from '@coderline/alphatab/rendering/ScoreBeatContainerGlyph';
 import type { ScoreRenderer } from '@coderline/alphatab/rendering/ScoreRenderer';
+import type { HeaderKey } from '@coderline/alphatab/rendering/staves/HeaderProfile';
 import { StaffDisplayResolver } from '@coderline/alphatab/rendering/staves/StaffDisplayResolver';
 import { AccidentalHelper } from '@coderline/alphatab/rendering/utils/AccidentalHelper';
 import { BeamDirection } from '@coderline/alphatab/rendering/utils/BeamDirection';
@@ -163,7 +164,7 @@ export class ScoreBarRenderer extends LineBarRenderer {
     }
 
     protected override getBeamDirection(helper: BeamingHelper): BeamDirection {
-        return this._beamDirections.has(helper) ? this._beamDirections.get(helper)! : BeamDirection.Up;
+        return helper.beamDirection;
     }
 
     public centerStaffStemY(direction: BeamDirection) {
@@ -207,6 +208,23 @@ export class ScoreBarRenderer extends LineBarRenderer {
         return this.accidentalHelper.getMaxSteps(beat) / 2;
     }
 
+    protected override buildLineHeaderKey(key: HeaderKey): void {
+        const bar = this.bar;
+        const previous = bar.previousBar;
+        key.addHighFlag(StaffDisplayResolver.isPrimaryForElement(this.staff!, this.resolveClefDisplay()));
+        key.addHigh(bar.clef as number, 3);
+        key.addHigh(bar.clefOttava as number, 3);
+        key.addHighFlag(StaffDisplayResolver.isPrimaryForElement(this.staff!, this.resolveKeySignatureDisplay()));
+        key.addHigh((bar.keySignature as number) + 7, 4);
+        key.addHighFlag(previous !== null);
+        if (previous) {
+            key.addHigh(previous.clef as number, 3);
+            key.addHigh(previous.clefOttava as number, 3);
+            key.addHigh((previous.keySignature as number) + 7, 4);
+        }
+        this.buildTimeSignatureHeaderKey(key);
+    }
+
     protected override createLinePreBeatGlyphs(): void {
         // Clef
         let hasClef = false;
@@ -239,10 +257,7 @@ export class ScoreBarRenderer extends LineBarRenderer {
                     offset = 6;
                     break;
             }
-            this.createStartSpacing();
-
             this.addPreBeatGlyph(new ClefGlyph(0, this.getScoreY(offset), this.bar.clef, this.bar.clefOttava));
-            this.addPreBeatGlyph(new SpacingGlyph(0, 0, this.smuflMetrics.preBeatGlyphSpacing));
             hasClef = true;
         }
         // Key signature
@@ -253,7 +268,6 @@ export class ScoreBarRenderer extends LineBarRenderer {
                 (this.index === 0 && this.bar.keySignature !== KeySignature.C) ||
                 (this.bar.previousBar && this.bar.keySignature !== this.bar.previousBar.keySignature))
         ) {
-            this.createStartSpacing();
             this._createKeySignatureGlyphs();
         }
         // Time Signature
@@ -271,7 +285,6 @@ export class ScoreBarRenderer extends LineBarRenderer {
                     this.bar.masterBar.isFreeTime &&
                     this.bar.masterBar.isFreeTime !== this.bar.previousBar.masterBar.isFreeTime))
         ) {
-            this.createStartSpacing();
             this._createTimeSignatureGlyphs();
         }
     }
@@ -347,10 +360,6 @@ export class ScoreBarRenderer extends LineBarRenderer {
         }
 
         this.addPreBeatGlyph(glyph);
-
-        if (!glyph.isEmpty) {
-            this.addPreBeatGlyph(new SpacingGlyph(0, 0, this.smuflMetrics.preBeatGlyphSpacing));
-        }
     }
 
     private _createTimeSignatureGlyphs(): void {
@@ -365,7 +374,6 @@ export class ScoreBarRenderer extends LineBarRenderer {
                 this.bar.masterBar.isFreeTime
             )
         );
-        this.addPreBeatGlyph(new SpacingGlyph(0, 0, this.smuflMetrics.preBeatGlyphSpacing));
     }
 
     protected override createVoiceGlyphs(v: Voice): void {
@@ -373,6 +381,40 @@ export class ScoreBarRenderer extends LineBarRenderer {
         for (const b of v.beats) {
             this.addBeatGlyph(new ScoreBeatContainerGlyph(b));
         }
+    }
+
+    private _chordNoteHeadInfoStarts: number[] | null = null;
+    private _chordNoteHeadInfos: ScoreChordNoteHeadInfo[] | null = null;
+
+    protected override createBeatGlyphs(): void {
+        super.createBeatGlyphs();
+        this._chordNoteHeadInfoStarts = null;
+        this._chordNoteHeadInfos = null;
+    }
+
+    /**
+     * The note head info shared by the chords of all voices starting at the given display start in this bar,
+     * created with the given main voice direction on the first request. Only available while the beat glyphs
+     * are created.
+     */
+    public getChordNoteHeadInfo(displayStart: number, mainVoiceDirection: BeamDirection): ScoreChordNoteHeadInfo {
+        const starts = this._chordNoteHeadInfoStarts;
+        const infos = this._chordNoteHeadInfos;
+        if (starts === null || infos === null) {
+            const first = new ScoreChordNoteHeadInfo(mainVoiceDirection);
+            this._chordNoteHeadInfoStarts = [displayStart];
+            this._chordNoteHeadInfos = [first];
+            return first;
+        }
+        for (let i = 0, j = starts.length; i < j; i++) {
+            if (starts[i] === displayStart) {
+                return infos[i];
+            }
+        }
+        const info = new ScoreChordNoteHeadInfo(mainVoiceDirection);
+        starts.push(displayStart);
+        infos.push(info);
+        return info;
     }
 
     public override getNoteLine(note: Note): number {
@@ -383,11 +425,8 @@ export class ScoreBarRenderer extends LineBarRenderer {
         return this.accidentalHelper.getNoteSteps(n);
     }
 
-    private readonly _beamDirections = new Map<BeamingHelper, BeamDirection>();
-
     public override completeBeamingHelper(helper: BeamingHelper) {
-        const direction = this._calculateBeamDirection(helper);
-        this._beamDirections.set(helper, direction);
+        helper.beamDirection = this._calculateBeamDirection(helper);
     }
 
     private _calculateBeamDirection(helper: BeamingHelper): BeamDirection {
@@ -460,7 +499,11 @@ export class ScoreBarRenderer extends LineBarRenderer {
         bottomY: number,
         canvas: ICanvas
     ): void {
-        using _ = ElementStyleHelper.beat(canvas, BeatSubElement.StandardNotationStem, beat);
-        canvas.fillRect(x, topY, this.smuflMetrics.stemThickness, bottomY - topY);
+        const previousColor = ElementStyleHelper.applyBeat(canvas, BeatSubElement.StandardNotationStem, beat);
+        try {
+            canvas.fillRect(x, topY, this.smuflMetrics.stemThickness, bottomY - topY);
+        } finally {
+            ElementStyleHelper.restore(canvas, previousColor);
+        }
     }
 }

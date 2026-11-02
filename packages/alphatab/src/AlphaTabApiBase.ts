@@ -436,6 +436,9 @@ export class AlphaTabApiBase<TSettings> {
         this._setupClickHandling();
         // delay rendering to allow ui to hook up with events first.
         this.uiFacade.beginInvoke(() => {
+            if (this._isDestroyed) {
+                return;
+            }
             this.uiFacade.initialRender();
         });
     }
@@ -506,6 +509,18 @@ export class AlphaTabApiBase<TSettings> {
         this._player.destroy();
         this.uiFacade.destroy();
         this._renderer.destroy();
+
+        this._score = null;
+        this._tracks = [];
+        this._trackIndexes = null;
+        this._trackIndexLookup = null;
+        this._tickCache = null;
+        this._beatVisibilityChecker.bounds = null;
+        this._currentBeat = null;
+        this._currentBeatBounds = null;
+        this._previousCursorCache = null;
+        this._selectionStart = undefined;
+        this._selectionEnd = undefined;
     }
 
     /**
@@ -755,9 +770,15 @@ export class AlphaTabApiBase<TSettings> {
                 this._trackIndexes.push(track.index);
             }
             this._trackIndexLookup = new Set<number>(this._trackIndexes);
-            this._onScoreLoaded(score);
-            this.loadMidiForScore();
+            let generateMidi = this._onScoreLoaded(score);
+            if (generateMidi && !this._canRenderBeforeMidi(score)) {
+                this.loadMidiForScore();
+                generateMidi = false;
+            }
             this.render(renderHints);
+            if (generateMidi) {
+                this.loadMidiForScore();
+            }
         } else {
             this._tracks = tracks;
 
@@ -784,11 +805,10 @@ export class AlphaTabApiBase<TSettings> {
         if (!this.container.isVisible) {
             Logger.warning(
                 'Rendering',
-                'AlphaTab container was invisible while autosizing, waiting for element to become visible',
-                null
+                'AlphaTab container was invisible while autosizing, waiting for element to become visible'
             );
             this.uiFacade.rootContainerBecameVisible.on(() => {
-                Logger.debug('Rendering', 'AlphaTab container became visible, doing autosizing', null);
+                Logger.debug('Rendering', 'AlphaTab container became visible, doing autosizing');
                 this.triggerResize();
             });
         } else {
@@ -1073,7 +1093,7 @@ export class AlphaTabApiBase<TSettings> {
 
             currentHandler?.onDetach(cursors);
             if (value) {
-                value?.onDetach(cursors);
+                value.onAttach(cursors);
             } else if (this._defaultCursorHandler) {
                 this._defaultCursorHandler!.onAttach(cursors);
             }
@@ -1714,7 +1734,7 @@ export class AlphaTabApiBase<TSettings> {
 
         this._player.instance = newPlayer;
 
-        return false;
+        return true;
     }
 
     /**
@@ -1731,7 +1751,7 @@ export class AlphaTabApiBase<TSettings> {
 
         const score = this.score!;
 
-        Logger.debug('AlphaTab', 'Generating Midi');
+        Logger.trace('AlphaTab', 'Generating Midi');
         const midiFile: MidiFile = new MidiFile();
         const handler: AlphaSynthMidiFileHandler = new AlphaSynthMidiFileHandler(midiFile);
         const generator: MidiFileGenerator = new MidiFileGenerator(score, this.settings, handler);
@@ -2248,6 +2268,8 @@ export class AlphaTabApiBase<TSettings> {
             const scroll = this.uiFacade.getScrollContainer();
             this.uiFacade.stopScrolling(scroll);
         }
+        this._scrollHandlerMode = scrollMode;
+        this._scrollHandlerVertical = isVertical;
 
         switch (scrollMode) {
             case ScrollMode.Off:
@@ -2931,7 +2953,6 @@ export class AlphaTabApiBase<TSettings> {
 
         (this.beatMouseUp as EventEmitterOfT<Beat | null>).trigger(beat);
         this.uiFacade.triggerEvent(this.container, 'beatMouseUp', beat, originalEvent);
-        this._isBeatMouseDown = false;
     }
 
     private _seekToBeat(beat: Beat) {
@@ -2969,7 +2990,6 @@ export class AlphaTabApiBase<TSettings> {
 
         (this.noteMouseUp as EventEmitterOfT<Note | null>).trigger(note);
         this.uiFacade.triggerEvent(this.container, 'noteMouseUp', note, originalEvent);
-        this._isNoteMouseDown = false;
     }
 
     private _updateSelectionCursor(range: PlaybackRange | null) {
@@ -2997,6 +3017,8 @@ export class AlphaTabApiBase<TSettings> {
             if (this.settings.player.enablePlaybackRangeSelection || this.settings.player.enableSeekToClick) {
                 e.preventDefault();
             }
+            this._isBeatMouseDown = false;
+            this._isNoteMouseDown = false;
             const relX: number = e.getX(this.canvasElement);
             const relY: number = e.getY(this.canvasElement);
             const beat: Beat | null = this._renderer.boundsLookup?.getBeatAtPos(relX, relY) ?? null;
@@ -3039,23 +3061,36 @@ export class AlphaTabApiBase<TSettings> {
             const relX: number = e.getX(this.canvasElement);
             const relY: number = e.getY(this.canvasElement);
             const beat: Beat | null = this._renderer.boundsLookup?.getBeatAtPos(relX, relY) ?? null;
-            this._onBeatMouseUp(e, beat);
+            try {
+                this._onBeatMouseUp(e, beat);
 
-            if (this._isNoteMouseDown) {
-                if (beat) {
-                    const note = this._renderer.boundsLookup?.getNoteAtPos(beat, relX, relY) ?? null;
-                    this._onNoteMouseUp(e, note);
-                } else {
-                    this._onNoteMouseUp(e, null);
+                if (this._isNoteMouseDown) {
+                    if (beat) {
+                        const note = this._renderer.boundsLookup?.getNoteAtPos(beat, relX, relY) ?? null;
+                        this._onNoteMouseUp(e, note);
+                    } else {
+                        this._onNoteMouseUp(e, null);
+                    }
                 }
+            } finally {
+                this._isBeatMouseDown = false;
+                this._isNoteMouseDown = false;
             }
         });
-        this._renderer.postRenderFinished.on(() => {
-            if (!this._selectionStart || !this._hasCursor || !this.settings.player.enablePlaybackRangeSelection) {
-                return;
-            }
-            this._cursorSelectRange(this._selectionStart, this._selectionEnd);
-        });
+    }
+
+    /**
+     * Rebuilds the selection highlight against the current layout. A selection without an end beat yields an empty highlight.
+     */
+    private _refreshSelectionHighlight() {
+        if (!this._selectionStart) {
+            return;
+        }
+        this._selectionStart.bounds = undefined;
+        if (this._selectionEnd) {
+            this._selectionEnd.bounds = undefined;
+        }
+        this._cursorSelectRange(this._selectionStart, this._selectionEnd);
     }
 
     /**
@@ -3466,16 +3501,41 @@ export class AlphaTabApiBase<TSettings> {
      *
      */
     public readonly scoreLoaded: IEventEmitterOfT<Score>;
-    private _onScoreLoaded(score: Score): void {
+    /**
+     * @returns true if the caller has to generate the midi for the current player
+     * (a new player generates it once it is ready).
+     */
+    private _onScoreLoaded(score: Score): boolean {
         if (this._isDestroyed) {
-            return;
+            return false;
         }
         (this.scoreLoaded as EventEmitterOfT<Score>).trigger(score);
         this.uiFacade.triggerEvent(this.container, 'scoreLoaded', score);
-        if (!this._setupOrDestroyPlayer()) {
-            // feed midi into current player (a new player will trigger a midi generation once the player is ready)
-            this.loadMidiForScore();
+        return !this._setupOrDestroyPlayer();
+    }
+
+    /**
+     * Whether the score can be handed to the renderer before its midi is generated.
+     * A synchronous renderer gains nothing from it, and beat timers are only known after the midi generation.
+     */
+    private _canRenderBeforeMidi(score: Score): boolean {
+        if (this._renderer.instance instanceof ScoreRenderer) {
+            return false;
         }
+        for (const track of score.tracks) {
+            for (const staff of track.staves) {
+                for (const bar of staff.bars) {
+                    for (const voice of bar.voices) {
+                        for (const beat of voice.beats) {
+                            if (beat.showTimer) {
+                                return false;
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        return true;
     }
 
     /**
@@ -3681,9 +3741,7 @@ export class AlphaTabApiBase<TSettings> {
 
         this._currentBeat = null;
         this._cursorUpdateTick(this._previousTick, false, 1, true, true);
-        if (this._selectionStart) {
-            this.highlightPlaybackRange(this._selectionStart.beat, this._selectionEnd!.beat);
-        }
+        this._refreshSelectionHighlight();
 
         (this.postRenderFinished as EventEmitter).trigger();
         this.uiFacade.triggerEvent(this.container, 'postRenderFinished', null);

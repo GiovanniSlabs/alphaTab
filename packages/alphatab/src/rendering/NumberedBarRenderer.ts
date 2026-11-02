@@ -13,15 +13,14 @@ import type { Voice } from '@coderline/alphatab/model/Voice';
 import type { ICanvas } from '@coderline/alphatab/platform/ICanvas';
 import { BeatXPosition } from '@coderline/alphatab/rendering/BeatXPosition';
 import { BarLineGlyph } from '@coderline/alphatab/rendering/glyphs/BarLineGlyph';
-import { BarNumberGlyph } from '@coderline/alphatab/rendering/glyphs/BarNumberGlyph';
 import {
     NumberedDashBeatContainerGlyph,
     NumberedNoteBeatContainerGlyphBase
 } from '@coderline/alphatab/rendering/glyphs/NumberedDashBeatContainerGlyph';
 import { ScoreTimeSignatureGlyph } from '@coderline/alphatab/rendering/glyphs/ScoreTimeSignatureGlyph';
-import { SpacingGlyph } from '@coderline/alphatab/rendering/glyphs/SpacingGlyph';
 import { LineBarRenderer } from '@coderline/alphatab/rendering/LineBarRenderer';
 import { NumberedBeatContainerGlyph } from '@coderline/alphatab/rendering/NumberedBeatContainerGlyph';
+import type { HeaderKey } from '@coderline/alphatab/rendering/staves/HeaderProfile';
 import { StaffDisplayResolver } from '@coderline/alphatab/rendering/staves/StaffDisplayResolver';
 import { BeamDirection } from '@coderline/alphatab/rendering/utils/BeamDirection';
 import type { BeamingHelper, BeamingHelperDrawInfo } from '@coderline/alphatab/rendering/utils/BeamingHelper';
@@ -129,71 +128,74 @@ export class NumberedBarRenderer extends LineBarRenderer {
         for (let i: number = 0, j: number = h.beats.length; i < j; i++) {
             const beat: Beat = h.beats[i];
 
-            using _ = ElementStyleHelper.beat(canvas, flagsElement, beat);
+            const previousColor = ElementStyleHelper.applyBeat(canvas, flagsElement, beat);
+            try {
+                const direction: BeamDirection = this.getBeamDirection(h);
+                const isGrace: boolean = h.graceType !== GraceType.None;
+                const scaleMod: number = isGrace ? EngravingSettings.GraceScale : 1;
 
-            const direction: BeamDirection = this.getBeamDirection(h);
-            const isGrace: boolean = h.graceType !== GraceType.None;
-            const scaleMod: number = isGrace ? EngravingSettings.GraceScale : 1;
+                let barSpacing: number = (this.beamSpacing + this.beamThickness) * scaleMod;
+                let barSize = this.beamThickness * scaleMod;
+                if (direction === BeamDirection.Down) {
+                    barSpacing = -barSpacing;
+                    barSize = -barSize;
+                }
 
-            let barSpacing: number = (this.beamSpacing + this.beamThickness) * scaleMod;
-            let barSize = this.beamThickness * scaleMod;
-            if (direction === BeamDirection.Down) {
-                barSpacing = -barSpacing;
-                barSize = -barSize;
-            }
+                let barCount: number = ModelUtils.getIndex(beat.duration) - 2;
+                let beatLineX: number = this.getBeatX(beat, BeatXPosition.PreNotes);
 
-            let barCount: number = ModelUtils.getIndex(beat.duration) - 2;
-            let beatLineX: number = this.getBeatX(beat, BeatXPosition.PreNotes);
+                let barStartX: number = 0;
+                let barEndX: number = 0;
+                if (i === h.beats.length - 1) {
+                    barStartX = beatLineX;
+                    barEndX = this.getBeatX(beat, BeatXPosition.PostNotes);
+                } else {
+                    barStartX = beatLineX;
+                    barEndX = this.getBeatX(h.beats[i + 1], BeatXPosition.PreNotes);
+                }
 
-            let barStartX: number = 0;
-            let barEndX: number = 0;
-            if (i === h.beats.length - 1) {
-                barStartX = beatLineX;
-                barEndX = this.getBeatX(beat, BeatXPosition.PostNotes);
-            } else {
-                barStartX = beatLineX;
-                barEndX = this.getBeatX(h.beats[i + 1], BeatXPosition.PreNotes);
-            }
+                const barStart: number = cy + this.y + this.calculateBeamY(h, beatLineX);
+                for (let barIndex: number = 0; barIndex < barCount; barIndex++) {
+                    const barY: number = barStart + barIndex * barSpacing;
 
-            const barStart: number = cy + this.y + this.calculateBeamY(h, beatLineX);
-            for (let barIndex: number = 0; barIndex < barCount; barIndex++) {
-                const barY: number = barStart + barIndex * barSpacing;
+                    LineBarRenderer.paintSingleBar(
+                        canvas,
+                        cx + this.x + barStartX,
+                        barY,
+                        cx + this.x + barEndX,
+                        barY,
+                        barSize
+                    );
+                }
 
-                LineBarRenderer.paintSingleBar(
-                    canvas,
-                    cx + this.x + barStartX,
-                    barY,
-                    cx + this.x + barEndX,
-                    barY,
-                    barSize
-                );
-            }
-
-            // dashes for additional numbers
-            const container = this.voiceContainer.getBeatContainer(beat) as NumberedBeatContainerGlyph | undefined;
-            if (container && container.hasAdditionalNumbers) {
-                for (const additionalNumber of container.iterateAdditionalNumbers()) {
-                    barCount = additionalNumber.barCount;
-                    beatLineX =
-                        this.beatGlyphsStart +
-                        additionalNumber.x +
-                        additionalNumber.getBeatX(BeatXPosition.PreNotes, false);
-                    for (let barIndex = 0; barIndex < barCount; barIndex++) {
-                        const barY: number = barStart + barIndex * barSpacing;
-                        const additionalBarEndX =
+                // dashes for additional numbers
+                const container = this.voiceContainer.getBeatContainer(beat) as NumberedBeatContainerGlyph | undefined;
+                if (container && container.hasAdditionalNumbers) {
+                    for (const additionalNumber of container.iterateAdditionalNumbers()) {
+                        barCount = additionalNumber.barCount;
+                        beatLineX =
                             this.beatGlyphsStart +
                             additionalNumber.x +
-                            additionalNumber.getBeatX(BeatXPosition.PostNotes, false);
-                        LineBarRenderer.paintSingleBar(
-                            canvas,
-                            cx + this.x + beatLineX,
-                            barY,
-                            cx + this.x + additionalBarEndX,
-                            barY,
-                            barSize
-                        );
+                            additionalNumber.getBeatX(BeatXPosition.PreNotes, false);
+                        for (let barIndex = 0; barIndex < barCount; barIndex++) {
+                            const barY: number = barStart + barIndex * barSpacing;
+                            const additionalBarEndX =
+                                this.beatGlyphsStart +
+                                additionalNumber.x +
+                                additionalNumber.getBeatX(BeatXPosition.PostNotes, false);
+                            LineBarRenderer.paintSingleBar(
+                                canvas,
+                                cx + this.x + beatLineX,
+                                barY,
+                                cx + this.x + additionalBarEndX,
+                                barY,
+                                barSize
+                            );
+                        }
                     }
                 }
+            } finally {
+                ElementStyleHelper.restore(canvas, previousColor);
             }
         }
     }
@@ -269,15 +271,17 @@ export class NumberedBarRenderer extends LineBarRenderer {
         if (this.index === 0 || (this.bar.masterBar.isRepeatStart && this.staff!.isCascadePrimary)) {
             this.addPreBeatGlyph(new BarLineGlyph(false, this.bar.staff.track.score.stylesheet.extendBarLines));
         }
+        this.createStartSpacing();
         this.createLinePreBeatGlyphs();
-        const hasSpaceAfterStartGlyphs = this.createStartSpacing();
-        if (this.shouldCreateBarNumber()) {
-            const barNumberGlyph = new BarNumberGlyph(0, this.getLineHeight(-0.5), this.bar.index + 1);
-            this.barNumberGlyph = barNumberGlyph;
-            this.addPreBeatGlyph(barNumberGlyph);
-        } else if (!hasSpaceAfterStartGlyphs) {
-            this.addPreBeatGlyph(new SpacingGlyph(0, 0, this.smuflMetrics.oneStaffSpace));
-        }
+    }
+
+    protected override buildHeaderKey(key: HeaderKey): void {
+        super.buildHeaderKey(key);
+        key.addHighFlag(this.staff!.isCascadePrimary);
+    }
+
+    protected override buildLineHeaderKey(key: HeaderKey): void {
+        this.buildTimeSignatureHeaderKey(key);
     }
 
     protected override createLinePreBeatGlyphs(): void {
@@ -297,7 +301,6 @@ export class NumberedBarRenderer extends LineBarRenderer {
                     this.bar.masterBar.isFreeTime &&
                     this.bar.masterBar.isFreeTime !== this.bar.previousBar.masterBar.isFreeTime))
         ) {
-            this.createStartSpacing();
             this._createTimeSignatureGlyphs();
         }
     }
@@ -315,6 +318,7 @@ export class NumberedBarRenderer extends LineBarRenderer {
                     masterBar.isFreeTime !== masterBar.previousMasterBar!.isFreeTime)
         );
         g.barSubElement = BarSubElement.NumberedTimeSignature;
+        g.trailingSpacing = this.smuflMetrics.oneStaffSpace;
         this.addPreBeatGlyph(g);
     }
 
@@ -340,11 +344,21 @@ export class NumberedBarRenderer extends LineBarRenderer {
             // we want a glyph on every quarter tick
 
             if (b.duration < Duration.Quarter) {
+                // numbered notation never extends a rest with dashes: every further quarter repeats the 0
+                const repeatRest = b.isRest && !b.isEmpty;
                 const endTick = b.displayStart + b.displayDuration;
                 let dashTick = b.displayStart + MidiUtils.QuarterTime;
                 while (dashTick < endTick) {
                     const isFullTick = endTick - dashTick >= MidiUtils.QuarterTime;
-                    if (isFullTick) {
+                    if (isFullTick && repeatRest) {
+                        const restNumber = new NumberedNoteBeatContainerGlyphBase(
+                            b,
+                            absoluteStart + dashTick,
+                            MidiUtils.QuarterTime
+                        );
+                        this.addBeatGlyph(restNumber);
+                        mainContainer.addNotes(restNumber);
+                    } else if (isFullTick) {
                         const dash = new NumberedDashBeatContainerGlyph(v.index, absoluteStart + dashTick);
                         this.addBeatGlyph(dash);
                         mainContainer.addDash(dash);

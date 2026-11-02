@@ -2,16 +2,16 @@ import { type Bar, BarSubElement } from '@coderline/alphatab/model/Bar';
 import { type Beat, BeatSubElement } from '@coderline/alphatab/model/Beat';
 import type { ElementDisplay } from '@coderline/alphatab/model/ElementDisplay';
 import type { Note } from '@coderline/alphatab/model/Note';
-import { BarNumberDisplay } from '@coderline/alphatab/model/RenderStylesheet';
+import type { BarNumberDisplay } from '@coderline/alphatab/model/RenderStylesheet';
 import type { Voice } from '@coderline/alphatab/model/Voice';
 import type { ICanvas } from '@coderline/alphatab/platform/ICanvas';
 import { LineBarRenderer } from '@coderline/alphatab/rendering//LineBarRenderer';
 import { NoteYPosition } from '@coderline/alphatab/rendering/BarRendererBase';
 import { BeatXPosition } from '@coderline/alphatab/rendering/BeatXPosition';
 import { ScoreTimeSignatureGlyph } from '@coderline/alphatab/rendering/glyphs/ScoreTimeSignatureGlyph';
-import { SpacingGlyph } from '@coderline/alphatab/rendering/glyphs/SpacingGlyph';
 import type { ScoreRenderer } from '@coderline/alphatab/rendering/ScoreRenderer';
 import { SlashBeatContainerGlyph } from '@coderline/alphatab/rendering/SlashBeatContainerGlyph';
+import type { HeaderKey } from '@coderline/alphatab/rendering/staves/HeaderProfile';
 import { StaffDisplayResolver } from '@coderline/alphatab/rendering/staves/StaffDisplayResolver';
 import { BeamDirection } from '@coderline/alphatab/rendering/utils/BeamDirection';
 import type { BeamingHelper } from '@coderline/alphatab/rendering/utils/BeamingHelper';
@@ -101,7 +101,8 @@ export class SlashBarRenderer extends LineBarRenderer {
 
     public override doLayout(): void {
         super.doLayout();
-        if (this.voiceContainer.tupletGroups.size > 0) {
+        const tupletGroups = this.voiceContainer.tupletGroups;
+        if (tupletGroups && tupletGroups.size > 0) {
             this.registerOverflowTop(this.tupletSize);
         }
     }
@@ -148,6 +149,10 @@ export class SlashBarRenderer extends LineBarRenderer {
         return BeamDirection.Up;
     }
 
+    protected override buildLineHeaderKey(key: HeaderKey): void {
+        this.buildTimeSignatureHeaderKey(key);
+    }
+
     protected override createLinePreBeatGlyphs(): void {
         const timeSignatureDisplay = this.resolveTimeSignatureDisplay();
         if (
@@ -163,14 +168,11 @@ export class SlashBarRenderer extends LineBarRenderer {
                     this.bar.masterBar.isFreeTime &&
                     this.bar.masterBar.isFreeTime !== this.bar.previousBar.masterBar.isFreeTime))
         ) {
-            this.createStartSpacing();
             this._createTimeSignatureGlyphs();
         }
     }
 
     private _createTimeSignatureGlyphs(): void {
-        this.addPreBeatGlyph(new SpacingGlyph(0, 0, this.smuflMetrics.oneStaffSpace));
-
         const masterBar = this.bar.masterBar;
         const g = new ScoreTimeSignatureGlyph(
             0,
@@ -217,8 +219,12 @@ export class SlashBarRenderer extends LineBarRenderer {
         bottomY: number,
         canvas: ICanvas
     ): void {
-        using _ = ElementStyleHelper.beat(canvas, BeatSubElement.SlashStem, beat);
-        canvas.fillRect(x, topY, this.smuflMetrics.stemThickness, bottomY - topY);
+        const previousColor = ElementStyleHelper.applyBeat(canvas, BeatSubElement.SlashStem, beat);
+        try {
+            canvas.fillRect(x, topY, this.smuflMetrics.stemThickness, bottomY - topY);
+        } finally {
+            ElementStyleHelper.restore(canvas, previousColor);
+        }
     }
 
     protected override paintBeamHelper(

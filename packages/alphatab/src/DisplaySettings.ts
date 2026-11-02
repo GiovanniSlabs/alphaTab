@@ -21,6 +21,10 @@ export enum SystemsLayoutMode {
 
 /**
  * The display settings control how the general layout and display of alphaTab is done.
+ * @remarks
+ * The "♪ alphaTab.net" attribution in the rendered score is not configurable here. It must stay visible in the
+ * rendered output; removing, hiding, covering or cropping it requires permission from the alphaTab maintainers, see
+ * [Attribution](https://alphatab.net/docs/attribution).
  * @json
  * @json_declaration
  * @public
@@ -397,9 +401,9 @@ export class DisplaySettings {
      * The left padding applied between the left line and the first glyph in the following staff in a system.
      * @since 1.4.0
      * @category Display
-     * @defaultValue `2`
+     * @defaultValue `6`
      */
-    public staffPaddingLeft: number = 2;
+    public staffPaddingLeft: number = 6;
 
     /**
      * Clearance applied around each effect band on its staff-facing side:
@@ -433,7 +437,7 @@ export class DisplaySettings {
      * The mode used to arrange staves and systems.
      * @since 1.3.0
      * @category Display
-     * @defaultValue `1`
+     * @defaultValue `SystemsLayoutMode.Automatic`
      * @remarks
      * By default alphaTab uses an own (automatic) mode to arrange and scale the bars when
      * putting them into staves. This property allows changing this mode to change the music sheet arrangement.

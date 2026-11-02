@@ -30,28 +30,24 @@ describe('BarLayoutingInfoPowerLawFormula', () => {
 
     /**
      * Builds a single-spring `BarLayoutingInfo` whose only spring covers exactly `duration` ticks
-     * and forces the reference minimum-duration to `duration` via `recomputeSpringConstants`. With
+     * with the reference minimum-duration set to `duration`. With
      * `d == dmin == duration`, phi collapses to `(d/dmin)^exponent = 1` independent of the ratio,
      * so this helper is mainly used to confirm the `phi=1` baseline.
      *
      * Returns phi derived from the spring constant by inverting `k = 1 / (phi * minDurationWidth)`.
      */
     function phiAtMinDuration(duration: number, spacingRatio: number): number {
-        const info = new BarLayoutingInfo(spacingRatio);
+        const info = new BarLayoutingInfo(spacingRatio, 0, 0, duration);
         info.addSpring(0, duration, 0, 0, 0);
         info.addSpring(duration, duration, 0, 0, 0);
         info.finish();
-        // Force the system-wide reference to `duration` (mimics StaffSystem._trackSystemMinDuration).
-        info.recomputeSpringConstants(duration);
         const spring = info.springs.get(0)!;
         return 1 / (spring.springConstant * minDurationWidth);
     }
 
     /**
      * Builds a `BarLayoutingInfo` such that the spring under test has duration `d` (gap to the
-     * next spring) and the system-wide minimum-duration reference is `dmin`. The reference is
-     * forced via `recomputeSpringConstants(dmin)` after `finish()`, mirroring the path
-     * `StaffSystem` takes when a bar's local minimum disagrees with the system minimum.
+     * next spring) and the layout-wide minimum-duration reference is `dmin`.
      *
      * Returns phi for the spring under test, derived from its spring constant. Note that the
      * spring's `smallestDuration` equals its `duration` here (a single duration was added at that
@@ -59,12 +55,11 @@ describe('BarLayoutingInfoPowerLawFormula', () => {
      * `_calculateSpringConstant` is 1 and the read of `phi` is uncontaminated.
      */
     function phiFromGap(d: number, dmin: number, spacingRatio: number): number {
-        const info = new BarLayoutingInfo(spacingRatio);
+        const info = new BarLayoutingInfo(spacingRatio, 0, 0, dmin);
         // Spring 0 at t=0, gap to next = d -> spring 0 gets duration `d`.
         info.addSpring(0, d, 0, 0, 0);
         info.addSpring(d, d, 0, 0, 0);
         info.finish();
-        info.recomputeSpringConstants(dmin);
         const spring = info.springs.get(0)!;
         return 1 / (spring.springConstant * minDurationWidth);
     }
@@ -159,7 +154,7 @@ describe('BarLayoutingInfoPowerLawFormula', () => {
         // (whole / sixteenth = 16x, log2(16) = 4 doublings). Under the OLD additive formula
         // `phi = 1 + 0.85 * log2(d/dmin)`, the whole-rest bar got phi = 1.0 (because d == dmin in
         // its own bar) and the sixteenth bar got phi = 1.0 too - making them equally stiff and
-        // the rest bar absorb justification force disproportionately. With system-wide _minDuration
+        // the rest bar absorb justification force disproportionately. With a shared _minDuration
         // (A2) and the new power-law formula (A1), the whole rest now sits at phi = r^4 against a
         // 60-tick reference.
         const r = 1.5;
@@ -180,22 +175,37 @@ describe('BarLayoutingInfoPowerLawFormula', () => {
     });
 
     it('sub-minimum duration produces phi < 1 (compression)', () => {
-        // d/dmin < 1 means the spring is shorter than the system minimum reference. phi should
+        // d/dmin < 1 means the spring is shorter than the minimum reference. phi should
         // drop below 1 so that the spring is *stiffer* than the reference (less stretchy).
-        // This case can arise during reconcile when an earlier bar's duration is shorter than
-        // the reference passed in by the system.
-        const info = new BarLayoutingInfo(1.5);
+        const info = new BarLayoutingInfo(1.5, 0, 0, 120); // reference: an eighth
         info.addSpring(0, 60, 0, 0, 0);
         info.addSpring(60, 60, 0, 0, 0);
-        // After finish(), recompute against a larger minDuration than this bar's local one.
         info.finish();
-        info.recomputeSpringConstants(120); // pretend the system min is 120 (eighth)
         const spring = info.springs.get(0)!;
         // Spring duration = gap to next spring = 60. With minDuration = 120, d/dmin = 0.5.
         // phi = 0.5 ^ log2(1.5) = 0.5 ^ 0.5849... ≈ 0.6667
         const phi = 1 / (spring.springConstant * minDurationWidth);
         expect(phi).toBeLessThan(1.0);
         expect(phi).toBeCloseTo(Math.pow(0.5, Math.log2(1.5)), 6);
+    });
+
+    it('minimum stretch force covers post + beat padding + next pre, but not the first pre', () => {
+        // the first spring's pre-beat width is a fixed offset in front of the springs and
+        // must not be stretched in; adjacent beats keep the beat content padding apart.
+        const info = new BarLayoutingInfo(Math.SQRT2, 5);
+        info.addSpring(0, 960, 0, 3, 4);
+        info.addSpring(960, 960, 0, 6, 2);
+        info.finish();
+        const k = info.springs.get(0)!.springConstant;
+        expect(info.minStretchForce).toBeCloseTo((4 + 5 + 6) * k, 10);
+    });
+
+    it('minimum stretch force covers post + barline padding for the last beat', () => {
+        const info = new BarLayoutingInfo(Math.SQRT2, 5, 7);
+        info.addSpring(0, 960, 0, 3, 4);
+        info.finish();
+        const k = info.springs.get(0)!.springConstant;
+        expect(info.minStretchForce).toBeCloseTo((4 + 7) * k, 10);
     });
 
     describe('spacingExponentFromRatio clamps to documented range', () => {
@@ -214,5 +224,97 @@ describe('BarLayoutingInfoPowerLawFormula', () => {
             expect(BarLayoutingInfo.spacingExponentFromRatio(2.5)).toBeCloseTo(1.0, 10);
             expect(BarLayoutingInfo.spacingExponentFromRatio(10)).toBeCloseTo(1.0, 10);
         });
+    });
+});
+
+describe('BarLayoutingInfoHeaderRods', () => {
+    it('the trailing space is the empty space of the last header column', () => {
+        const info = new BarLayoutingInfo();
+        // clef column on two staves: the wider clef defines the ink end, the larger spacing the column end
+        info.addHeaderRod(200, 0, 20 + 4, 4);
+        info.addHeaderRod(200, 0, 16 + 6, 6);
+        info.addHeaderRod(100, 0, 3, 3);
+        expect(info.preBeatSize).toBeCloseTo(3 + 24, 8);
+        expect(info.preBeatTrailingSpace).toBeCloseTo(4, 8);
+    });
+
+    it('a header with only the start spacing is fully empty space', () => {
+        const info = new BarLayoutingInfo();
+        info.addHeaderRod(0, 0, 1, 0);
+        info.addHeaderRod(100, 0, 6, 6);
+        expect(info.preBeatTrailingSpace).toBeCloseTo(6, 8);
+    });
+});
+
+describe('BarLayoutingInfoMinimumWidths', () => {
+    /** A half note followed by four 32nd notes, each beat 10 wide (post beat size). */
+    function longAndShortBar(): BarLayoutingInfo {
+        const info = new BarLayoutingInfo(Math.SQRT2);
+        info.addSpring(0, 1920, 0, 0, 10);
+        for (let i = 0; i < 4; i++) {
+            info.addSpring(1920 + i * 120, 120, 0, 0, 10);
+        }
+        info.finish();
+        return info;
+    }
+
+    function gaps(info: BarLayoutingInfo, force: number, barEnd: number): number[] {
+        const positions = info.buildOnTimePositions(force);
+        const x: number[] = [];
+        for (const v of positions) {
+            x.push(v);
+        }
+        x.push(barEnd);
+        const result: number[] = [];
+        for (let i = 1; i < x.length; i++) {
+            result.push(x[i] - x[i - 1]);
+        }
+        return result;
+    }
+
+    it('natural width at the minimum stretch force is unchanged', () => {
+        const info = longAndShortBar();
+        const natural = info.calculateVoiceWidth(info.minStretchForce);
+        expect(info.spaceToForce(natural)).toBeCloseTo(info.minStretchForce, 8);
+        for (const g of gaps(info, info.minStretchForce, natural)) {
+            expect(g).toBeGreaterThanOrEqual(9.999999);
+        }
+    });
+
+    it('a compressed bar takes the space from the long notes first', () => {
+        const info = longAndShortBar();
+        expect(info.minVoiceWidth).toBeCloseTo(50, 8);
+        const natural = info.calculateVoiceWidth(info.minStretchForce);
+        const space = (info.minVoiceWidth + natural) / 2;
+        const force = info.spaceToForce(space);
+        expect(force).toBeGreaterThanOrEqual(0);
+        expect(force).toBeLessThan(info.minStretchForce);
+        expect(info.calculateVoiceWidth(force)).toBeCloseTo(space, 8);
+
+        const g = gaps(info, force, space);
+        expect(g[0]).toBeCloseTo(space - 40, 8);
+        for (let i = 1; i < g.length; i++) {
+            expect(g[i]).toBeCloseTo(10, 8);
+        }
+    });
+
+    it('a bar narrower than its minimum width squeezes all beats proportionally', () => {
+        const info = longAndShortBar();
+        const force = info.spaceToForce(25);
+        expect(force).toBeCloseTo(-0.5, 8);
+        expect(info.calculateVoiceWidth(force)).toBeCloseTo(25, 8);
+        for (const g of gaps(info, force, 25)) {
+            expect(g).toBeCloseTo(5, 8);
+        }
+    });
+
+    it('stretched bars keep the proportional spacing', () => {
+        const info = longAndShortBar();
+        const natural = info.calculateVoiceWidth(info.minStretchForce);
+        const force = info.spaceToForce(natural * 2);
+        expect(force).toBeCloseTo(info.minStretchForce * 2, 8);
+        const g = gaps(info, force, natural * 2);
+        const k0 = info.springs.get(0)!.springConstant;
+        expect(g[0]).toBeCloseTo(force / k0, 8);
     });
 });

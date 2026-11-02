@@ -1,3 +1,5 @@
+import { MapObjectReader } from '@coderline/alphatab/io/MapObjectReader';
+import { TestPlatform } from 'test/TestPlatform';
 import { describe, expect, it } from 'vitest';
 import { BarSerializer } from '@coderline/alphatab/generated/model/BarSerializer';
 import { RenderStylesheetSerializer } from '@coderline/alphatab/generated/model/RenderStylesheetSerializer';
@@ -31,14 +33,14 @@ describe('RenderStylesheet L3 historical defaults', () => {
         expectElementDisplay(rs.scoreConfig.clef, true, StaffPlacement.AllStaves, SystemDisplay.AllSystems);
         expectElementDisplay(rs.scoreConfig.keySignature, true, StaffPlacement.AllStaves, SystemDisplay.AllSystems);
         expectElementDisplay(rs.scoreConfig.timeSignature, true, StaffPlacement.AllStaves, SystemDisplay.AllSystems);
-        expect(rs.scoreConfig.barNumber).toBe(BarNumberDisplay.AllBars);
+        expect(rs.scoreConfig.barNumber).toBe(BarNumberDisplay.FirstOfSystem);
     });
 
     it('tabConfig defaults', () => {
         const rs = new RenderStylesheet();
         expectElementDisplay(rs.tabConfig.clef, true, StaffPlacement.AllStaves, SystemDisplay.AllSystems);
         expectElementDisplay(rs.tabConfig.timeSignature, true, StaffPlacement.Primary, SystemDisplay.AllSystems);
-        expect(rs.tabConfig.barNumber).toBe(BarNumberDisplay.AllBars);
+        expect(rs.tabConfig.barNumber).toBe(BarNumberDisplay.FirstOfSystem);
         expect(rs.tabConfig.rhythm).toBe(TabRhythmMode.Automatic);
         expectElementDisplay(rs.tabConfig.rests, true, StaffPlacement.Primary, undefined);
     });
@@ -47,13 +49,13 @@ describe('RenderStylesheet L3 historical defaults', () => {
         const rs = new RenderStylesheet();
         expectElementDisplay(rs.slashConfig.keySignature, false, undefined, undefined);
         expectElementDisplay(rs.slashConfig.timeSignature, true, StaffPlacement.Primary, SystemDisplay.AllSystems);
-        expect(rs.slashConfig.barNumber).toBe(BarNumberDisplay.AllBars);
+        expect(rs.slashConfig.barNumber).toBe(BarNumberDisplay.FirstOfSystem);
     });
 
     it('numberedConfig defaults', () => {
         const rs = new RenderStylesheet();
         expectElementDisplay(rs.numberedConfig.timeSignature, true, StaffPlacement.Primary, SystemDisplay.AllSystems);
-        expect(rs.numberedConfig.barNumber).toBe(BarNumberDisplay.AllBars);
+        expect(rs.numberedConfig.barNumber).toBe(BarNumberDisplay.FirstOfSystem);
     });
 });
 
@@ -80,7 +82,7 @@ describe('Bar L1 fields default to undefined', () => {
 describe('RenderStylesheet.barNumberDisplay shim (ADR-006 §1)', () => {
     it('getter reads from scoreConfig.barNumber', () => {
         const rs = new RenderStylesheet();
-        expect(rs.barNumberDisplay).toBe(BarNumberDisplay.AllBars);
+        expect(rs.barNumberDisplay).toBe(BarNumberDisplay.FirstOfSystem);
         rs.scoreConfig.barNumber = BarNumberDisplay.Hide;
         expect(rs.barNumberDisplay).toBe(BarNumberDisplay.Hide);
     });
@@ -147,23 +149,23 @@ describe('Bar.barNumberDisplay shim (ADR-006 §2)', () => {
 
 describe('JSON round-trip for the new staff-config surface', () => {
     function roundtripStylesheet(rs: RenderStylesheet): RenderStylesheet {
-        const out = RenderStylesheetSerializer.toJson(rs)!;
+        const out = TestPlatform.toJson(w => RenderStylesheetSerializer.write(rs, w));
         const result = new RenderStylesheet();
-        RenderStylesheetSerializer.fromJson(result, out);
+        RenderStylesheetSerializer.read(result, new MapObjectReader(out));
         return result;
     }
 
     function roundtripStaff(staff: Staff): Staff {
-        const out = StaffSerializer.toJson(staff)!;
+        const out = TestPlatform.toJson(w => StaffSerializer.write(staff, w));
         const result = new Staff();
-        StaffSerializer.fromJson(result, out);
+        StaffSerializer.read(result, new MapObjectReader(out));
         return result;
     }
 
     function roundtripBar(bar: Bar): Bar {
-        const out = BarSerializer.toJson(bar)!;
+        const out = TestPlatform.toJson(w => BarSerializer.write(bar, w));
         const result = new Bar();
-        BarSerializer.fromJson(result, out);
+        BarSerializer.read(result, new MapObjectReader(out));
         return result;
     }
 
@@ -173,7 +175,7 @@ describe('JSON round-trip for the new staff-config surface', () => {
         expect(rs.tabConfig.rhythm).toBe(TabRhythmMode.Automatic);
         expectElementDisplay(rs.tabConfig.rests, true, StaffPlacement.Primary, undefined);
         expectElementDisplay(rs.numberedConfig.timeSignature, true, StaffPlacement.Primary, SystemDisplay.AllSystems);
-        expect(rs.scoreConfig.barNumber).toBe(BarNumberDisplay.AllBars);
+        expect(rs.scoreConfig.barNumber).toBe(BarNumberDisplay.FirstOfSystem);
     });
 
     it('preserves RenderStylesheet L3 author overrides', () => {

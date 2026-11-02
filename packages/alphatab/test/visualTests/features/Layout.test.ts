@@ -1,5 +1,8 @@
-import { describe, it } from 'vitest';
+import { describe, expect, it } from 'vitest';
+import { ScoreLoader } from '@coderline/alphatab/importer/ScoreLoader';
 import { LayoutMode } from '@coderline/alphatab/LayoutMode';
+import { BarNumberDisplay } from '@coderline/alphatab/model/RenderStylesheet';
+import { ScoreRenderer } from '@coderline/alphatab/rendering/ScoreRenderer';
 import { Settings } from '@coderline/alphatab/Settings';
 import { VisualTestHelper, VisualTestOptions, VisualTestRun } from 'test/visualTests/VisualTestHelper';
 
@@ -52,12 +55,62 @@ describe('LayoutTests', () => {
         await VisualTestHelper.runVisualTest('layout/horizontal-layout.gp', settings);
     });
 
+    it('horizontal-layout-tie-across-partial', async () => {
+        const settings: Settings = new Settings();
+        settings.display.layoutMode = LayoutMode.Horizontal;
+        settings.display.barCountPerPartial = 2;
+        await VisualTestHelper.runVisualTestTex(
+            '\\track \\staff {score tabs} :2 5.3 7.3 | 7.3{t} 5.3 | 5.3{t} 3.3 | 3.3{t} 5.3 | 5.3{t} 7.3',
+            'test-data/visual-tests/layout/horizontal-layout-tie-across-partial.png',
+            settings
+        );
+    });
+
     it('horizontal-layout-bar5to8', async () => {
         const settings: Settings = new Settings();
         settings.display.layoutMode = LayoutMode.Horizontal;
         settings.display.startBar = 5;
         settings.display.barCount = 4;
         await VisualTestHelper.runVisualTest('layout/horizontal-layout-5to8.gp', settings);
+    });
+
+    it('horizontal-layout-bar-numbers-partials', async () => {
+        // the first bar of a partial has its number centred on the barline, reaching into the previous partial
+        const settings: Settings = new Settings();
+        settings.display.layoutMode = LayoutMode.Horizontal;
+        let tex = '';
+        for (let i = 0; i < 12; i++) {
+            tex += 'C4.4 D4 E4 F4 |';
+        }
+        await VisualTestHelper.runVisualTestTex(
+            tex,
+            'test-data/visual-tests/layout/horizontal-layout-bar-numbers-partials.png',
+            settings,
+            o => {
+                o.score.stylesheet.barNumberDisplay = BarNumberDisplay.AllBars;
+            }
+        );
+    });
+
+    it('horizontal-layout-scale', () => {
+        const totalWidths: number[] = [];
+        for (const scale of [1, 2]) {
+            const settings = new Settings();
+            settings.display.layoutMode = LayoutMode.Horizontal;
+            settings.display.scale = scale;
+            // padding is not scaled
+            settings.display.padding = [0];
+
+            const renderer = new ScoreRenderer(settings);
+            renderer.width = 1300;
+            renderer.renderFinished.on(e => {
+                totalWidths.push(e.totalWidth);
+            });
+            renderer.renderScore(ScoreLoader.loadAlphaTex('C4 D4 E4 F4 | C4 D4 E4 F4', settings), [0]);
+        }
+
+        expect(totalWidths.length).toBe(2);
+        expect(totalWidths[1]).toBeCloseTo(totalWidths[0] * 2, 0);
     });
 
     it('brackets-braces-none', async () => {
@@ -259,7 +312,7 @@ describe('LayoutTests', () => {
                     new VisualTestRun(1300, 'test-data/visual-tests/layout/multi-system-slur-scale-down-0-1300.png'),
                     new VisualTestRun(600, 'test-data/visual-tests/layout/multi-system-slur-scale-down-1-600.png'),
                     new VisualTestRun(300, 'test-data/visual-tests/layout/multi-system-slur-scale-down-2-300.png'),
-                    new VisualTestRun(300, 'test-data/visual-tests/layout/multi-system-slur-scale-down-3-700.png')
+                    new VisualTestRun(300, 'test-data/visual-tests/layout/multi-system-slur-scale-down-3-300.png')
                 ];
             }
         );
@@ -565,5 +618,31 @@ describe('LayoutTests', () => {
                     }
                 ));
         });
+    });
+
+    it('barnumbers', async () => {
+        await VisualTestHelper.runVisualTestTex(
+            `
+            \\defaultBarNumberDisplay allBars
+            // anacrusis (no number)
+            \\ac 
+                C4.1 
+            | 
+            // standard bar number 1
+                C4 
+            | 
+            // custom text instead of bar number 2
+            \\barNumber "Hello" 
+                C4
+            |
+            // a jump to 10 
+            \\barNumber 10
+                C4
+            |
+            // now becomes 11 after the customization before
+                C4
+            `,
+            'test-data/visual-tests/layout/barnumbers.png'
+        );
     });
 });
