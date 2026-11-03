@@ -168,7 +168,26 @@ class AttributionTestRun {
     }
 }
 
-describe('AttributionTests', () => {
+describe('AttributionRemovedTests', () => {
+    // Lattes fork: the attribution is not drawn (ScoreLayout._resolveShowAttribution)
+    it('no-mark-on-long-song', async () => {
+        const settings = new Settings();
+        settings.core.engine = 'svg';
+        settings.core.enableLazyLoading = false;
+        const score = await VisualTestHelper.loadTex(
+            `\\tempo 120 . ${':4 C4 D4 E4 F4 | '.repeat(20)}:4 C4 D4 E4 F4`,
+            settings
+        );
+        const run = new AttributionTestRun(settings);
+        run.renderer.width = 700;
+        run.renderer.renderScore(score, score.tracks.map(t => t.index));
+        expect(run.results.size).toBeGreaterThan(0);
+        expect(run.allMarkPaths()).toEqual([]);
+    });
+});
+
+// The upstream behaviour of the attribution, which the Lattes fork does not draw.
+describe.skip('AttributionTests', () => {
     // songs up to 10 bars are rendered without attribution
     const filler = ' | :4 r r r r'.repeat(10);
     const fourBars = `

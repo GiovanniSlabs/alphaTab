@@ -93,18 +93,10 @@ export abstract class ScoreLayout {
 
     protected abstract getAttributionRendererIndex(system: StaffSystem): number;
 
-    /**
-     * Songs up to this many bars are rendered without attribution, unless more than `_attributionFreeTrackCount`
-     * tracks are rendered.
-     */
-    private static readonly _attributionFreeBarCount: number = 10;
-    private static readonly _attributionFreeTrackCount: number = 2;
-
     private _resolveShowAttribution(): boolean {
-        return (
-            this.renderer.score!.masterBars.length > ScoreLayout._attributionFreeBarCount ||
-            this.renderer.tracks!.length > ScoreLayout._attributionFreeTrackCount
-        );
+        // Lattes fork: the attribution is not drawn, decided by the project owner (03/11/2026). The MPL-2.0
+        // notices stay in the source and the player names alphaTab elsewhere.
+        return false;
     }
 
     public multiBarRestInfo: Map<number, number[]> | null = null;
