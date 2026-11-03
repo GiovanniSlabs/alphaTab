@@ -590,6 +590,24 @@ describe('MidiTickLookupTest', () => {
         expect(current.duration).toBe(840);
     });
 
+    it('find-beat-start-in-repeat', () => {
+        // the player snaps to the start of the current beat on pause: in the second pass of a repeat that is
+        // the start within the second pass, getBeatStart(beat) only knows the first one
+        const settings = new Settings();
+        const score = ScoreLoader.loadAlphaTex(
+            '\\ro :4 3.3 3.3 3.3 3.3 | \\rc 2 3.3 3.3 3.3 3.3 | 3.3 3.3 3.3 3.3',
+            settings
+        );
+        const lookup = buildLookup(score, settings);
+        const tracks = new Set<number>([0]);
+
+        const secondPass = 2 * 3840;
+        const result = lookup.findBeat(tracks, secondPass + 960 + 10, null);
+        expect(result!.beat.id).toBe(score.tracks[0].staves[0].bars[0].voices[0].beats[1].id);
+        expect(result!.start).toBe(secondPass + 960);
+        expect(lookup.getBeatStart(result!.beat)).toBe(960);
+    });
+
     it('cursor-snapping', async () => {
         const buffer = await TestPlatform.loadFile('test-data/audio/cursor-snapping.gp');
         const settings = new Settings();

@@ -4108,7 +4108,9 @@ export class AlphaTabApiBase<TSettings> {
             const currentBeat = this._currentBeat;
             const tickCache = this._tickCache;
             if (currentBeat && tickCache) {
-                this._player.tickPosition = tickCache.getBeatStart(currentBeat.beat);
+                // the start within the masterbar occurence being played: getBeatStart(beat) only knows the
+                // first occurence, pausing in the second pass of a repeat would jump back to the first one
+                this._player.tickPosition = currentBeat.start;
                 this.scrollToCursor();
             }
         }
