@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { ScoreLoader } from '@coderline/alphatab/importer/ScoreLoader';
+import { IOHelper } from '@coderline/alphatab/io/IOHelper';
 import { Logger } from '@coderline/alphatab/Logger';
 import { MidiPlaybackController } from '@coderline/alphatab/midi/MidiPlaybackController';
 import type { Score } from '@coderline/alphatab/model/Score';
@@ -710,5 +711,25 @@ describe('MidiPlaybackControllerTest', () => {
             1, 2, 3, 7, 8, 9, 10, 10
         ];
         testAlphaTexRepeat(tex, expectedBars, 50);
+    });
+
+    it('musicxml-dal-segno-al-fine', () => {
+        // "D.S. al Fine" printed with <sound dalsegno>: from the segno until the Fine, then stop
+        const measure = (n: number, content: string) =>
+            `<measure number="${n}">${n === 1 ? '<attributes><divisions>1</divisions><time><beats>4</beats><beat-type>4</beat-type></time><clef><sign>G</sign><line>2</line></clef></attributes>' : ''}${content}<note><pitch><step>C</step><octave>4</octave></pitch><duration>4</duration><voice>1</voice><type>whole</type></note></measure>`;
+        const direction = (words: string, sound: string) =>
+            `<direction placement="above"><direction-type>${words}</direction-type><sound ${sound}/></direction>`;
+        const xml = `<?xml version="1.0" encoding="UTF-8"?>
+<score-partwise version="4.0">
+  <part-list><score-part id="P1"><part-name>Music</part-name></score-part></part-list>
+  <part id="P1">${[
+      measure(1, ''),
+      measure(2, direction('<segno/>', 'segno="2"')),
+      measure(3, direction('<words>Fine</words>', 'fine="yes"')),
+      measure(4, ''),
+      measure(5, direction('<words>D.S. al Fine</words>', 'dalsegno="2"'))
+  ].join('')}</part></score-partwise>`;
+        const score = ScoreLoader.loadScoreFromBytes(IOHelper.stringToBytes(xml));
+        testRepeat(score, [0, 1, 2, 3, 4, 1, 2], 50);
     });
 });

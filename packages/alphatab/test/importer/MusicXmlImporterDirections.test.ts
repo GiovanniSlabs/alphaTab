@@ -31,6 +31,14 @@ describe('MusicXmlImporter - directions', () => {
         expect(firstBeatText('<words>Si</words><words></words>')).toBe('Si♭');
     });
 
+    it('drops the blank spacer between the parts of a chord symbol', () => {
+        // MuseScore and Finale put a tiny blank <words> between the chord name and the accidental glyph.
+        expect(firstBeatText('<words>Si</words><words font-size="5.1"> </words><words>\ue260</words>')).toBe(
+            'Si\u266d'
+        );
+        expect(firstBeatText('<words>Do</words><words><![CDATA[\n]]></words><words>Sol</words>')).toBe('Do\nSol');
+    });
+
     it('keeps a single <words> unchanged', () => {
         expect(firstBeatText('<words>Do</words>')).toBe('Do');
     });

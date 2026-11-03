@@ -886,7 +886,7 @@ describe('MusicXmlImporterTests', () => {
             ]);
             expectDirections(score, 0, []);
             expectDirections(score, 1, [Direction.JumpDaCoda]);
-            expectDirections(score, 2, [Direction.JumpDaCapo]);
+            expectDirections(score, 2, [Direction.JumpDaCapoAlCoda]);
             expectDirections(score, 3, [Direction.TargetCoda]);
             expect(beatText(score, 1)).toBeNull();
             expect(beatText(score, 2)).toBeNull();
@@ -913,9 +913,22 @@ describe('MusicXmlImporterTests', () => {
             ]);
             expectDirections(score, 0, [Direction.TargetSegno]);
             expectDirections(score, 1, [Direction.TargetFine]);
-            expectDirections(score, 2, [Direction.JumpDalSegno]);
+            expectDirections(score, 2, [Direction.JumpDalSegnoAlFine]);
             expect(beatText(score, 1)).toBeNull();
             expect(beatText(score, 2)).toBeNull();
+        });
+
+        it('plain-jumps', () => {
+            const score = loadMeasures([
+                direction('<direction-type><words>D.S.</words></direction-type><sound dalsegno="segno1"/>'),
+                direction('<direction-type><words>Da Capo</words></direction-type><sound dacapo="yes"/>'),
+                direction('<direction-type><words>Andante al Fine</words></direction-type><sound dalsegno="segno1"/>')
+            ]);
+            expectDirections(score, 0, [Direction.JumpDalSegno]);
+            expectDirections(score, 1, [Direction.JumpDaCapo]);
+            // only a known label tells where the jump ends
+            expectDirections(score, 2, [Direction.JumpDalSegno]);
+            expect(beatText(score, 2)).toBe('Andante al Fine');
         });
 
         it('coda-symbol-with-tocoda', () => {
@@ -947,8 +960,8 @@ describe('MusicXmlImporterTests', () => {
                 ),
                 direction('<direction-type><words>To\u00a0Coda</words></direction-type><sound tocoda="coda1"/>')
             ]);
-            expectDirections(score, 0, [Direction.JumpDaCapo]);
-            expectDirections(score, 1, [Direction.JumpDalSegno]);
+            expectDirections(score, 0, [Direction.JumpDaCapoAlFine]);
+            expectDirections(score, 1, [Direction.JumpDalSegnoAlCoda]);
             expectDirections(score, 2, [Direction.JumpDaCoda]);
             expect(beatText(score, 0)).toBeNull();
             expect(beatText(score, 1)).toBeNull();

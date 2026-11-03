@@ -1359,9 +1359,11 @@ export class MusicXmlImporter extends ScoreImporter {
 
     /**
      * Applies the jump and marker attributes of a `<sound>` (measure or direction level) as directions.
+     * @param words The words printed with the `<sound>`: MusicXML has no attribute for "al Fine" or
+     * "al Coda", only the label tells where the jump ends.
      * @returns true if any direction was applied.
      */
-    private _parseSoundDirections(element: XmlNode, masterBar: MasterBar): boolean {
+    private _parseSoundDirections(element: XmlNode, masterBar: MasterBar, words: string = ''): boolean {
         let hasDirections = false;
         if (element.attributes.has('coda')) {
             masterBar.addDirection(Direction.TargetCoda);
@@ -1375,12 +1377,28 @@ export class MusicXmlImporter extends ScoreImporter {
 
         // yes-no typed, "no" means no jump
         if (element.getAttribute('dacapo', 'no') !== 'no') {
-            masterBar.addDirection(Direction.JumpDaCapo);
+            masterBar.addDirection(
+                MusicXmlImporter._jumpWithEnd(
+                    'dacapo',
+                    words,
+                    Direction.JumpDaCapo,
+                    Direction.JumpDaCapoAlFine,
+                    Direction.JumpDaCapoAlCoda
+                )
+            );
             hasDirections = true;
         }
 
         if (element.attributes.has('dalsegno')) {
-            masterBar.addDirection(Direction.JumpDalSegno);
+            masterBar.addDirection(
+                MusicXmlImporter._jumpWithEnd(
+                    'dalsegno',
+                    words,
+                    Direction.JumpDalSegno,
+                    Direction.JumpDalSegnoAlFine,
+                    Direction.JumpDalSegnoAlCoda
+                )
+            );
             hasDirections = true;
         }
 
@@ -1439,6 +1457,30 @@ export class MusicXmlImporter extends ScoreImporter {
             }
         }
         return normalized;
+    }
+
+    /**
+     * The jump of a `dacapo` or `dalsegno` attribute: "al Fine" and "al Coda" variants if the printed label
+     * says so ("D.S. al Fine" plays from the segno until the Fine), the plain jump otherwise.
+     */
+    private static _jumpWithEnd(
+        attribute: string,
+        words: string,
+        plain: Direction,
+        alFine: Direction,
+        alCoda: Direction
+    ): Direction {
+        const normalized = MusicXmlImporter._normalizeDirectionLabel(words);
+        if (MusicXmlImporter._soundDirectionLabels.get(attribute)!.indexOf(normalized) < 0) {
+            return plain;
+        }
+        if (normalized.endsWith('alfine')) {
+            return alFine;
+        }
+        if (normalized.endsWith('alcoda')) {
+            return alCoda;
+        }
+        return plain;
     }
 
     private static _isSoundDirectionLabel(words: string, sound: XmlNode): boolean {
@@ -2227,7 +2269,8 @@ export class MusicXmlImporter extends ScoreImporter {
                         tempo = Number.parseFloat(c.attributes.get('tempo')!);
                     }
                     sound = c;
-                    hasSoundDirections = this._parseSoundDirections(c, masterBar);
+                    // the direction-types come before the sound, allWords is complete here
+                    hasSoundDirections = this._parseSoundDirections(c, masterBar, allWords);
                     break;
                 // case 'listening': Ignored
             }
@@ -2288,6 +2331,11 @@ export class MusicXmlImporter extends ScoreImporter {
                     // one annotation: exporters split a chord symbol like "Si♭" into
                     // the text and a separate music glyph for the accidental.
                     // Overwriting would keep only the last part.
+                    // Between the parts they put a small blank <words> as spacer, which would show
+                    // as a full space ("Si ♭"). Line breaks are kept: they stack annotations.
+                    if (direction.innerText.trim().length === 0 && direction.innerText.indexOf('\n') < 0) {
+                        break;
+                    }
                     previousWords += MusicXmlImporter._toUnicodeSymbols(direction.innerText);
                     break;
                 // case 'symbol': Not supported
