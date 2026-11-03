@@ -2214,6 +2214,19 @@ export class MusicXmlImporter extends ScoreImporter {
         ['', '\u{1D12B}'] // double flat
     ]);
 
+    /**
+     * Accidentals written as `<symbol>` (SMuFL glyph name) next to the `<words>` of a chord symbol, the way
+     * Finale exports "Si♭": "Si", a blank spacer and `<symbol>accidentalFlat</symbol>`. Other symbols are not
+     * supported as text.
+     */
+    private static readonly _namedTextSymbols: Map<string, string> = new Map<string, string>([
+        ['accidentalFlat', '♭'],
+        ['accidentalNatural', '♮'],
+        ['accidentalSharp', '♯'],
+        ['accidentalDoubleSharp', '\u{1D12A}'],
+        ['accidentalDoubleFlat', '\u{1D12B}']
+    ]);
+
     private static _toUnicodeSymbols(text: string): string {
         let result = text;
         for (const [smufl, unicode] of MusicXmlImporter._textSymbols) {
@@ -2338,7 +2351,14 @@ export class MusicXmlImporter extends ScoreImporter {
                     }
                     previousWords += MusicXmlImporter._toUnicodeSymbols(direction.innerText);
                     break;
-                // case 'symbol': Not supported
+                case 'symbol': {
+                    // only the accidentals of chord symbols, dropping them changes the chord ("Si♭" -> "Si")
+                    const name = direction.innerText.trim();
+                    if (MusicXmlImporter._namedTextSymbols.has(name)) {
+                        previousWords += MusicXmlImporter._namedTextSymbols.get(name)!;
+                    }
+                    break;
+                }
                 case 'wedge':
                     MusicXmlSpanReader.readWedge(direction, spanEvents);
                     break;

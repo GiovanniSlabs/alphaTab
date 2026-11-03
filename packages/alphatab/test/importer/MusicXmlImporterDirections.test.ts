@@ -39,6 +39,20 @@ describe('MusicXmlImporter - directions', () => {
         expect(firstBeatText('<words>Do</words><words><![CDATA[\n]]></words><words>Sol</words>')).toBe('Do\nSol');
     });
 
+    it('reads accidentals written as <symbol> into the chord symbol', () => {
+        // Finale exports "Si♭" as the text, a blank spacer and the accidental as SMuFL glyph name
+        expect(
+            firstBeatText('<words>Si</words><words font-size="5.1">\u00a0</words><symbol>accidentalFlat</symbol>')
+        ).toBe('Si\u266d');
+        expect(firstBeatText('<words>Fa</words><symbol>accidentalSharp</symbol><words>-</words>')).toBe('Fa\u266f-');
+        // the XML reader trims the leading space of " 7M"
+        expect(firstBeatText('<words>Si</words><symbol>accidentalFlat</symbol><words> 7M</words>')).toBe(
+            'Si\u266d7M'
+        );
+        // other symbols are not text
+        expect(firstBeatText('<words>Do</words><symbol>segno</symbol>')).toBe('Do');
+    });
+
     it('keeps a single <words> unchanged', () => {
         expect(firstBeatText('<words>Do</words>')).toBe('Do');
     });
