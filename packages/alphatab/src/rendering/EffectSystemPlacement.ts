@@ -1,5 +1,6 @@
+import type { DisplaySettings } from '@coderline/alphatab/DisplaySettings';
 import type { EffectBand, EffectBandXRange } from '@coderline/alphatab/rendering/EffectBand';
-import { EffectBandPlacementCategory } from '@coderline/alphatab/rendering/EffectInfo';
+import { EffectBandPlacementCategory, type EffectInfo } from '@coderline/alphatab/rendering/EffectInfo';
 import type { Skyline } from '@coderline/alphatab/rendering/skyline/Skyline';
 import type { SkylineScratch } from '@coderline/alphatab/rendering/skyline/SkylineScratch';
 import { StaffSystemSkyline } from '@coderline/alphatab/rendering/skyline/StaffSystemSkyline';
@@ -48,7 +49,7 @@ export class EffectSystemPlacement {
      */
     public place(staff: RenderStaff): void {
         const sky = this.systemSkyline;
-        const pad = staff.system.layout.renderer.settings.display.effectBandPaddingBottom;
+        const display = staff.system.layout.renderer.settings.display;
 
         const top = this._top;
         const bottom = this._bottom;
@@ -94,8 +95,8 @@ export class EffectSystemPlacement {
         // numbers). Null when no such band exists, in which case every band is
         // placed against the full skyline exactly as before.
         const contentSky = staff.placesAgainstContentOnly ? this.contentSkyline : null;
-        this._placeSide(top, sky.upSky, contentSky ? contentSky.upSky : null, pad, /* isTop */ true);
-        this._placeSide(bottom, sky.downSky, contentSky ? contentSky.downSky : null, pad, /* isTop */ false);
+        this._placeSide(top, sky.upSky, contentSky ? contentSky.upSky : null, display, /* isTop */ true);
+        this._placeSide(bottom, sky.downSky, contentSky ? contentSky.downSky : null, display, /* isTop */ false);
     }
 
     /**
@@ -167,13 +168,21 @@ export class EffectSystemPlacement {
         }
     }
 
+    /** Bands placed at one height across the staff: {@link EffectBandPlacementCategory.HorizontalRow} or {@link EffectInfo.alignsAsRow}. */
+    private static _alignsAsRow(band: EffectBand): boolean {
+        return (
+            band.info.placementCategory === EffectBandPlacementCategory.HorizontalRow || band.info.alignsAsRow === true
+        );
+    }
+
     private _placeSide(
         bands: EffectBand[],
         sky: Skyline,
         contentSky: Skyline | null,
-        pad: number,
+        display: DisplaySettings,
         isTop: boolean
     ): void {
+        const pad = display.effectBandPaddingBottom;
         const groupBands = this._groupBands;
         const groupXStarts = this._groupXStarts;
         const groupXEnds = this._groupXEnds;
@@ -187,10 +196,10 @@ export class EffectSystemPlacement {
             let groupEnd = i + 1;
             const groupEffectId = band.info.effectId;
             const groupVoiceIndex = band.voice.index;
-            if (band.info.placementCategory === EffectBandPlacementCategory.HorizontalRow) {
+            if (EffectSystemPlacement._alignsAsRow(band)) {
                 while (
                     groupEnd < bands.length &&
-                    bands[groupEnd].info.placementCategory === EffectBandPlacementCategory.HorizontalRow &&
+                    EffectSystemPlacement._alignsAsRow(bands[groupEnd]) &&
                     bands[groupEnd].info.effectId === groupEffectId &&
                     bands[groupEnd].voice.index === groupVoiceIndex
                 ) {
@@ -211,6 +220,7 @@ export class EffectSystemPlacement {
             // Header-ignoring bands (bar numbers) query the content-only surface; the
             // clef/key/time never enters their magnitude.
             const querySky = contentSky !== null && band.info.ignoresStructuralHeader === true ? contentSky : sky;
+            const groupPad = band.info.bandPadding ? band.info.bandPadding(display) : pad;
 
             while (groupBands.length > 0) {
                 groupBands.pop();
@@ -243,8 +253,8 @@ export class EffectSystemPlacement {
                     const clearStart = m.renderer.x + clearStarts[r - firstRange];
                     const clearEnd = m.renderer.x + clearEnds[r - firstRange];
                     const mag = isTop
-                        ? querySky.placeAbove(clearStart, clearEnd, m.height, pad)
-                        : querySky.placeBelow(clearStart, clearEnd, m.height, pad);
+                        ? querySky.placeAbove(clearStart, clearEnd, m.height, groupPad)
+                        : querySky.placeBelow(clearStart, clearEnd, m.height, groupPad);
                     if (mag > groupMagnitude) {
                         groupMagnitude = mag;
                     }

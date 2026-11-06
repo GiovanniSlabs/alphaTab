@@ -16,7 +16,7 @@ import type { IObjectWriter } from "@coderline/alphatab/io/IObjectWriter";
  * @internal
  */
 export class DisplaySettingsSerializer {
-    private static readonly _fields: RecordFields = new RecordFields(["scale", "stretchforce", "spacingratio", "layoutmode", "staveprofile", "barsperrow", "startbar", "barcount", "barcountperpartial", "lastsystemfillthreshold", "justifylastsystem", "resources", "padding", "firstsystempaddingtop", "systempaddingtop", "systempaddingbottom", "lastsystempaddingbottom", "systemlabelpaddingleft", "systemlabelpaddingright", "accoladebarpaddingright", "inlinetuningpaddingright", "firstnotationstaffpaddingtop", "lastnotationstaffpaddingbottom", "notationstaffpaddingtop", "notationstaffpaddingbottom", "effectstaffpaddingtop", "effectstaffpaddingbottom", "firststaffpaddingleft", "staffpaddingleft", "effectbandpaddingbottom", "trackstaffpaddingbetween", "lyriclinespaddingbetween", "systemslayoutmode"]);
+    private static readonly _fields: RecordFields = new RecordFields(["scale", "stretchforce", "spacingratio", "layoutmode", "staveprofile", "barsperrow", "startbar", "barcount", "barcountperpartial", "lastsystemfillthreshold", "justifylastsystem", "resources", "padding", "firstsystempaddingtop", "systempaddingtop", "systempaddingbottom", "lastsystempaddingbottom", "systemlabelpaddingleft", "systemlabelpaddingright", "accoladebarpaddingright", "inlinetuningpaddingright", "firstnotationstaffpaddingtop", "lastnotationstaffpaddingbottom", "notationstaffpaddingtop", "notationstaffpaddingbottom", "effectstaffpaddingtop", "effectstaffpaddingbottom", "firststaffpaddingleft", "staffpaddingleft", "effectbandpaddingbottom", "effecttextpaddingbottom", "trackstaffpaddingbetween", "lyriclinespaddingbetween", "systemslayoutmode"]);
     public static read(obj: DisplaySettings, reader: IObjectReader): void {
         reader.readRecord(DisplaySettingsSerializer._fields, (id, k, rr) => DisplaySettingsSerializer._readField(obj, id, rr, false));
     }
@@ -117,12 +117,15 @@ export class DisplaySettingsSerializer {
                 obj.effectBandPaddingBottom = r.readNumber();
                 return true;
             case 30:
-                obj.trackStaffPaddingBetween = r.readNumber();
+                obj.effectTextPaddingBottom = r.readNumber();
                 return true;
             case 31:
-                obj.lyricLinesPaddingBetween = r.readNumber();
+                obj.trackStaffPaddingBetween = r.readNumber();
                 return true;
             case 32:
+                obj.lyricLinesPaddingBetween = r.readNumber();
+                return true;
+            case 33:
                 obj.systemsLayoutMode = JsonHelper.parseEnum<SystemsLayoutMode>(r.readValue(), SystemsLayoutMode)!;
                 return true;
         }
@@ -184,9 +187,10 @@ export class DisplaySettingsSerializer {
         w.numberField(27, obj.firstStaffPaddingLeft);
         w.numberField(28, obj.staffPaddingLeft);
         w.numberField(29, obj.effectBandPaddingBottom);
-        w.numberField(30, obj.trackStaffPaddingBetween);
-        w.numberField(31, obj.lyricLinesPaddingBetween);
-        w.numberField(32, obj.systemsLayoutMode as number);
+        w.numberField(30, obj.effectTextPaddingBottom);
+        w.numberField(31, obj.trackStaffPaddingBetween);
+        w.numberField(32, obj.lyricLinesPaddingBetween);
+        w.numberField(33, obj.systemsLayoutMode as number);
         w.endObject();
     }
 }

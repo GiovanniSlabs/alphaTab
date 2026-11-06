@@ -16,6 +16,12 @@ export class TextGlyph extends EffectGlyph {
 
     public colorOverride?: Color;
 
+    /**
+     * When set, every line is as high as this text instead of its own characters. Lattes fork: the texts of a
+     * row share one baseline, also when a character outside the measured range (e.g. ♭) would make one taller.
+     */
+    public lineHeightReference: string | null = null;
+
     public constructor(
         x: number,
         y: number,
@@ -41,7 +47,7 @@ export class TextGlyph extends EffectGlyph {
         for (const line of this._lines) {
             c.font = this.font;
             const size = c!.measureText(line);
-            const h = size.height;
+            const h = this.lineHeightReference !== null ? c.measureText(this.lineHeightReference).height : size.height;
             this._lineHeights.push(h);
             this.height += h;
             this.width = Math.max(this.width, size.width);

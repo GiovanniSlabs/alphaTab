@@ -1,3 +1,4 @@
+import type { DisplaySettings } from '@coderline/alphatab/DisplaySettings';
 import type { Beat } from '@coderline/alphatab/model/Beat';
 import type { NotationElement } from '@coderline/alphatab/NotationSettings';
 import type { BarRendererBase } from '@coderline/alphatab/rendering/BarRendererBase';
@@ -100,6 +101,19 @@ export interface EffectInfo {
      * bands stack above it correctly. Defaults to `false` (respects the header).
      */
     readonly ignoresStructuralHeader?: boolean;
+
+    /**
+     * When `true`, all bands of this effect (same voice) on a staff are placed at one height, like a
+     * {@link EffectBandPlacementCategory.HorizontalRow}, while keeping their own placement category.
+     * Lattes fork: chord symbols written as text form one row per staff (requested by the client, 06/11/2026).
+     */
+    readonly alignsAsRow?: boolean;
+
+    /**
+     * The clearance between this band and the content below it. Defaults to
+     * {@link DisplaySettings.effectBandPaddingBottom}.
+     */
+    readonly bandPadding?: (display: DisplaySettings) => number;
 
     /** When `true`, the band feeds each beat-glyph's paint extent into the rhythmic-spacing solver. */
     readonly contributesToBeatSpacing?: boolean;

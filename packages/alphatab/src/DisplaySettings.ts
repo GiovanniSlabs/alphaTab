@@ -418,6 +418,15 @@ export class DisplaySettings {
     public effectBandPaddingBottom = 5;
 
     /**
+     * Clearance between the row of free text annotations above the staff (e.g. chord symbols written as text)
+     * and the highest content below it. Lattes fork.
+     * @since 1.9.0
+     * @category Display
+     * @defaultValue `5`
+     */
+    public effectTextPaddingBottom = 5;
+
+    /**
      * The additional padding to apply between the staves of two separate tracks.
      * @since 1.8.0
      * @category Display

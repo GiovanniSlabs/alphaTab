@@ -1,3 +1,4 @@
+import type { DisplaySettings } from '@coderline/alphatab/DisplaySettings';
 import type { Beat } from '@coderline/alphatab/model/Beat';
 import { NotationElement } from '@coderline/alphatab/NotationSettings';
 import { TextAlign } from '@coderline/alphatab/platform/ICanvas';
@@ -21,14 +22,20 @@ export const textEffectInfo: EffectInfo = {
         return !!beat.text;
     },
     createNewGlyph: (renderer: BarRendererBase, beat: Beat): EffectGlyph => {
-        return new TextGlyph(
+        const glyph = new TextGlyph(
             0,
             0,
             beat.text!,
             renderer.resources.elementFonts.get(NotationElement.EffectText)!,
             TextAlign.Left
         );
+        // Lattes fork: one line height for the whole row (capital height), so "Si♭" and "Do" share the baseline.
+        glyph.lineHeightReference = 'D';
+        return glyph;
     },
     canExpand: (_from: Beat, _to: Beat): boolean => true,
-    placementCategory: EffectBandPlacementCategory.NoteAttached
+    placementCategory: EffectBandPlacementCategory.NoteAttached,
+    // Lattes fork: one row per staff, at its own distance from the content.
+    alignsAsRow: true,
+    bandPadding: (display: DisplaySettings): number => display.effectTextPaddingBottom
 };

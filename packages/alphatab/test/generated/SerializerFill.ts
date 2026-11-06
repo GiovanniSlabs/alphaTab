@@ -302,6 +302,7 @@ export class SerializerFill {
         obj.firstStaffPaddingLeft = 7.25;
         obj.staffPaddingLeft = 7.25;
         obj.effectBandPaddingBottom = 7.25;
+        obj.effectTextPaddingBottom = 7.25;
         obj.trackStaffPaddingBetween = 7.25;
         obj.lyricLinesPaddingBetween = 7.25;
     }
